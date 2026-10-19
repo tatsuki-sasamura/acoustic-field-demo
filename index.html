@@ -346,6 +346,16 @@
         <input type="range" id="fadeA" min="0.1" max="1" step="0.05" value="0.6" aria-label="素元波の濃さ">
         <output id="fadeAVal">0.60</output>
       </div>
+      <div class="ctl" id="rowEfade0">
+        <span class="lab">包絡面 消え始め</span>
+        <input type="range" id="efade0" min="0" max="20" step="0.5" value="12" aria-label="包絡面が消え始める距離 (波長)">
+        <output id="efade0Val">12 λ</output>
+      </div>
+      <div class="ctl" id="rowEfade1">
+        <span class="lab">包絡面 消える</span>
+        <input type="range" id="efade1" min="0.5" max="24" step="0.5" value="16" aria-label="包絡面が完全に消える距離 (波長)">
+        <output id="efade1Val">16 λ</output>
+      </div>
       <div class="ctl" id="rowCs">
         <span class="lab">音速</span>
         <input type="range" id="cs" min="100" max="1600" step="10" value="343" aria-label="音速 (m/s)">
@@ -444,6 +454,9 @@ const CAPTIONS = {
 let WAVELET_ALPHA = 0.6;
 let WAVELET_FADE_START = 1;
 let WAVELET_FADE_END = 3;
+// Envelope fading, in wavelengths travelled from the array (?efade0=&efade1=).
+let ENV_FADE_START = 12;
+let ENV_FADE_END = 16;
 
 const state = {
   geo: 'A',        // 'A' sphere caps, 'B' flat arrays with drive delays, 'C' plate + reflector
@@ -895,6 +908,7 @@ function drawLegend(ctx, m) {
     sample(4.5, 1); label('包絡面'); x += 18;
     dot(ctx, x + 6, cy, 6, COL.low); x += 16; label('下'); x += 14;
     dot(ctx, x + 6, cy, 6, COL.up); x += 16; label(m.geo === 'C' ? '反射' : '上');
+    if (m.geo === 'B') { x += 14; sample(5, 0.9); label('発射の遅れ'); }
   } else {
     label('振幅'); x += 8;
     label('0'); x += 6;
@@ -987,6 +1001,26 @@ function drawDevice(ctx, m) {
     fillStroke(ctx, COL.reflector, COL.reflectorEdge, 1.5);
     platePath(ctx, m.plate);
     fillStroke(ctx, COL.plate, COL.plateEdge, 2);
+  }
+  if (m.geo === 'B') {
+    // Drive delay of each element as a bar behind the element: length = distance sound travels in that delay.
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 5;
+    for (const h of m.halves) {
+      if (h.kind === 'img') continue;
+      ctx.strokeStyle = halfColor(h);
+      for (const s of h.src) {
+        const len = C_AIR * s.e;                        // mm
+        if (len < 0.05) continue;
+        const dir = s.y < 0 ? -1 : 1;                   // away from the centre
+        ctx.globalAlpha = 0.9;
+        ctx.beginPath();
+        ctx.moveTo(sx(s.x), sy(s.y));
+        ctx.lineTo(sx(s.x), sy(s.y + dir * len));
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
   }
   // Real sources only (the image sources of C are not drawn).
   for (const h of m.halves) {
@@ -1089,23 +1123,10 @@ function drawEnvelopes(ctx, h, t, pass) {
   const rFar = farthestCorner(h.F.x, h.F.y);
   const kHi = Math.floor((t - h.eMin) / PERIOD);
   const valid = new Array(n);
+  // Distance the envelope has travelled from the array: mean source distance + signed radius.
+  const dBar = h.d.reduce((a, b) => a + b, 0) / n;
   ctx.save();
   clipHalf(ctx, h);
-  ctx.beginPath();
-  for (let k = 0; k <= kHi; k++) {
-    const rho = C_AIR * (t - k * PERIOD - h.tArr);   // signed envelope radius [mm]
-    const r = Math.abs(rho);
-    if (r * PX_PER_MM < 1) continue;
-    if (rho < 0) {
-      // converging: only wavelets that have already been emitted
-      for (let i = 0; i < n; i++) valid[i] = h.d[i] >= r - 1e-6;
-      arcThrough(ctx, fx, fy, r * PX_PER_MM, ang, valid);
-    } else {
-      if (r > rFar) continue;
-      for (let i = 0; i < n; i++) valid[i] = true;
-      arcThrough(ctx, fx, fy, r * PX_PER_MM, angOpp, valid);
-    }
-  }
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   if (pass === 'halo') {
@@ -1115,7 +1136,26 @@ function drawEnvelopes(ctx, h, t, pass) {
     ctx.strokeStyle = halfColor(h);
     ctx.lineWidth = 4;
   }
-  ctx.stroke();
+  for (let k = 0; k <= kHi; k++) {
+    const rho = C_AIR * (t - k * PERIOD - h.tArr);   // signed envelope radius [mm]
+    const r = Math.abs(rho);
+    if (r * PX_PER_MM < 1) continue;
+    const u = (dBar + rho) / LAMBDA;                  // travelled distance in wavelengths
+    if (u >= ENV_FADE_END) continue;
+    const a = u > ENV_FADE_START ? (ENV_FADE_END - u) / (ENV_FADE_END - ENV_FADE_START) : 1;
+    ctx.globalAlpha = a;
+    ctx.beginPath();
+    if (rho < 0) {
+      // converging: only wavelets that have already been emitted
+      for (let i = 0; i < n; i++) valid[i] = h.d[i] >= r - 1e-6;
+      arcThrough(ctx, fx, fy, r * PX_PER_MM, ang, valid);
+    } else {
+      if (r > rFar) continue;
+      for (let i = 0; i < n; i++) valid[i] = true;
+      arcThrough(ctx, fx, fy, r * PX_PER_MM, angOpp, valid);
+    }
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -1330,6 +1370,8 @@ function loadSaved() {
     if (Number.isFinite(v.fade0)) WAVELET_FADE_START = v.fade0;
     if (Number.isFinite(v.fade1)) WAVELET_FADE_END = v.fade1;
     if (Number.isFinite(v.alpha)) WAVELET_ALPHA = v.alpha;
+    if (Number.isFinite(v.efade0)) ENV_FADE_START = v.efade0;
+    if (Number.isFinite(v.efade1)) ENV_FADE_END = v.efade1;
     if (Number.isFinite(v.c)) setSoundSpeed(v.c);
     if (Number.isFinite(v.tmax)) T_END = v.tmax;
   } catch (e) { /* storage unavailable: defaults stay */ }
@@ -1337,7 +1379,7 @@ function loadSaved() {
 function saveSettings() {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify({
-      fade0: WAVELET_FADE_START, fade1: WAVELET_FADE_END, alpha: WAVELET_ALPHA,
+      fade0: WAVELET_FADE_START, fade1: WAVELET_FADE_END, alpha: WAVELET_ALPHA, efade0: ENV_FADE_START, efade1: ENV_FADE_END,
       c: Math.round(C_AIR * 1000), tmax: T_END }));
   } catch (e) { /* ignore */ }
 }
@@ -1350,6 +1392,7 @@ function currentUrl() {
   q.set('t', state.t.toFixed(1));
   if (state.playing || state.autoplay) q.set('play', '1');
   q.set('fade0', WAVELET_FADE_START); q.set('fade1', WAVELET_FADE_END); q.set('alpha', WAVELET_ALPHA);
+  q.set('efade0', ENV_FADE_START); q.set('efade1', ENV_FADE_END);
   q.set('c', Math.round(C_AIR * 1000)); q.set('tmax', T_END);
   return u.toString();
 }
@@ -1375,6 +1418,9 @@ loadSaved();
   const f0 = num('fade0', 0, 6); if (f0 !== null) WAVELET_FADE_START = f0;
   const f1 = num('fade1', 0.25, 8); if (f1 !== null) WAVELET_FADE_END = f1;
   const al = num('alpha', 0.1, 1); if (al !== null) WAVELET_ALPHA = al;
+  const e0 = num('efade0', 0, 20); if (e0 !== null) ENV_FADE_START = e0;
+  const e1 = num('efade1', 0.5, 24); if (e1 !== null) ENV_FADE_END = e1;
+  if (ENV_FADE_END <= ENV_FADE_START) ENV_FADE_END = ENV_FADE_START + 0.5;
   const cs = num('c', 100, 1600); if (cs !== null) setSoundSpeed(cs);
   const tm = num('tmax', 100, 3000); if (tm !== null) T_END = tm;
   if (WAVELET_FADE_END <= WAVELET_FADE_START) WAVELET_FADE_END = WAVELET_FADE_START + 0.25;
@@ -1386,6 +1432,7 @@ const gearBtn = $('gear'), fadePop = $('fadePop');
 const fade0In = $('fade0'), fade1In = $('fade1'), fadeAIn = $('fadeA');
 const fade0Out = $('fade0Val'), fade1Out = $('fade1Val'), fadeAOut = $('fadeAVal');
 const csIn = $('cs'), csOut = $('csVal'), tmaxIn = $('tmax'), tmaxOut = $('tmaxVal');
+const efade0In = $('efade0'), efade1In = $('efade1'), efade0Out = $('efade0Val'), efade1Out = $('efade1Val');
 
 function setSoundSpeed(ms) {
   C_AIR = ms / 1000;                                   // mm/µs
@@ -1403,6 +1450,8 @@ function syncFade() {
   fade0In.value = WAVELET_FADE_START; fade0Out.textContent = WAVELET_FADE_START.toFixed(2).replace(/\.?0+$/, '') + ' λ';
   fade1In.value = WAVELET_FADE_END; fade1Out.textContent = WAVELET_FADE_END.toFixed(2).replace(/\.?0+$/, '') + ' λ';
   fadeAIn.value = WAVELET_ALPHA; fadeAOut.textContent = WAVELET_ALPHA.toFixed(2);
+  efade0In.value = ENV_FADE_START; efade0Out.textContent = ENV_FADE_START.toFixed(1).replace(/\.0$/, '') + ' λ';
+  efade1In.value = ENV_FADE_END; efade1Out.textContent = ENV_FADE_END.toFixed(1).replace(/\.0$/, '') + ' λ';
 }
 gearBtn.addEventListener('click', () => {
   const open = fadePop.hidden;
@@ -1421,6 +1470,16 @@ fade1In.addEventListener('input', () => {
   syncFade(); saveSettings(); requestRender();
 });
 fadeAIn.addEventListener('input', () => { WAVELET_ALPHA = Number(fadeAIn.value); syncFade(); saveSettings(); requestRender(); });
+efade0In.addEventListener('input', () => {
+  ENV_FADE_START = Number(efade0In.value);
+  if (ENV_FADE_END <= ENV_FADE_START) ENV_FADE_END = ENV_FADE_START + 0.5;
+  syncFade(); saveSettings(); requestRender();
+});
+efade1In.addEventListener('input', () => {
+  ENV_FADE_END = Number(efade1In.value);
+  if (ENV_FADE_START >= ENV_FADE_END) ENV_FADE_START = Math.max(0, ENV_FADE_END - 0.5);
+  syncFade(); saveSettings(); requestRender();
+});
 csIn.addEventListener('input', () => { setSoundSpeed(Number(csIn.value)); syncPhys(); saveSettings(); onParamsChanged(); });
 tmaxIn.addEventListener('input', () => {
   T_END = Number(tmaxIn.value);
