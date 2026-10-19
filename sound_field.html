@@ -357,8 +357,8 @@
         <output id="efade1Val">16 λ</output>
       </div>
       <div class="ctl" id="rowCs">
-        <span class="lab">音速</span>
-        <input type="range" id="cs" min="100" max="1600" step="10" value="343" aria-label="音速 (m/s)">
+        <span class="lab">音速 (λ 一定)</span>
+        <input type="range" id="cs" min="100" max="1600" step="10" value="343" aria-label="音速 (m/s)、波長は一定">
         <output id="csVal">343 m/s</output>
       </div>
       <div class="ctl" id="rowTmax">
@@ -388,8 +388,8 @@
    1. Physical model (lengths in mm, times in µs)
    ===================================================================== */
 let   C_AIR  = 0.343;                  // speed of sound in air: 343 m/s = 0.343 mm/µs
-const FREQ   = 0.040;                  // drive frequency: 40 kHz = 0.040 cycles per µs
-const PERIOD = 1 / FREQ;               // T = 25 µs
+let   FREQ   = 0.040;                  // drive frequency: 40 kHz = 0.040 cycles per µs
+let   PERIOD = 1 / FREQ;               // T = 25 µs
 let   LAMBDA = C_AIR / FREQ;           // λ = 8.575 mm
 const K_WAVE = 2 * Math.PI / LAMBDA;   // wavenumber k [rad/mm]
 const OMEGA  = 2 * Math.PI * FREQ;     // angular frequency ω [rad/µs]
@@ -1435,8 +1435,10 @@ const csIn = $('cs'), csOut = $('csVal'), tmaxIn = $('tmax'), tmaxOut = $('tmaxV
 const efade0In = $('efade0'), efade1In = $('efade1'), efade0Out = $('efade0Val'), efade1Out = $('efade1Val');
 
 function setSoundSpeed(ms) {
+  // The wavelength is kept fixed (the device geometry is drawn in wavelengths); the frequency follows.
   C_AIR = ms / 1000;                                   // mm/µs
-  LAMBDA = C_AIR / FREQ;
+  FREQ = C_AIR / LAMBDA;
+  PERIOD = 1 / FREQ;
   PLATE_PER_US = 1 / (1 / C_AIR - 1 / C_PLATE);
 }
 function syncPhys() {
