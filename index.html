@@ -196,14 +196,17 @@
   }
   #topRight { display: flex; align-items: center; gap: 8px; }
   #gear {
+    position: absolute;
+    top: 0;
+    right: 0;
     width: 44px;
     height: 44px;
-    margin-left: 0;
+    margin: 0;
     padding: 0;
-    border: 1px solid var(--accent);
-    border-radius: 8px;
-    background: #ffffff;
-    color: var(--accent);
+    border: 0;
+    border-radius: 0 0 0 10px;
+    background: #555555;
+    color: #ffffff;
     font-size: 26px;
     line-height: 1;
     cursor: pointer;
@@ -211,7 +214,8 @@
     border-width: 2px;
     border-radius: 10px;
   }
-  #gear[aria-expanded="true"] { background: var(--accent); color: #ffffff; }
+  #gear[aria-expanded="true"] { background: #222222; }
+  #topbar { padding-right: 48px; }
   #fadePop {
     border: 1px solid var(--accent);
     border-radius: 10px;
@@ -320,9 +324,9 @@
         <button type="button" class="opt" id="btnWave" aria-pressed="true">素元波と包絡面</button>
         <button type="button" class="opt" id="btnField" aria-pressed="false">音圧分布</button>
       </div>
-      <button type="button" id="gear" aria-label="設定" aria-expanded="false">&#9881;</button>
     </div>
   </div>
+  <button type="button" id="gear" aria-label="設定" aria-expanded="false">&#9881;</button>
 
   <div id="viewBox"><canvas id="view" aria-label="装置と音場の図"></canvas></div>
 
@@ -590,7 +594,7 @@ function buildModel() {
       for (let i = 0; i <= 200; i++) T0 = Math.min(T0, arrival(xa + (xb - xa) * i / 200, PLATE_BASE));
       const thick = (x) => {
         if (arrival(x, PLATE_BASE) <= T0 + 1e-9) return PLATE_BASE;
-        let lo = PLATE_BASE, hi = PLATE_BASE + 400;      // arrival() decreases with h (C_PLATE > C_AIR)
+        let lo = PLATE_BASE, hi = Math.max(PLATE_BASE + 0.5, Y + F.y - 2);   // exit point kept below the focus; arrival() decreases with h there
         for (let it = 0; it < 40; it++) {
           const mid = 0.5 * (lo + hi);
           if (arrival(x, mid) > T0) lo = mid; else hi = mid;
@@ -1095,7 +1099,7 @@ function drawDevice(ctx, m) {
   if (m.geo === 'C') {
     haloText(ctx, '反射板', sx(X_HALF) - 8, sy(m.reflectorY) + 6, 'right', 'top', COL.reflectorEdge);
     const xr = m.plate.x1;
-    haloText(ctx, 'ホログラム板', sx(xr) + 6, sy(-LINE_Y + m.plate.h(xr) / 2), 'left', 'middle', COL.plateEdge);
+    haloText(ctx, 'ホログラム板', sx(xr) - 6, sy(-LINE_Y) - 6, 'right', 'bottom', COL.plateEdge);
   }
   ctx.restore();
 }
