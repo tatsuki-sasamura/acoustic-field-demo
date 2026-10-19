@@ -364,6 +364,11 @@ const CAPTIONS = {
 /* =====================================================================
    2. State
    ===================================================================== */
+// Wavelet fading, in wavelengths from the source.
+const WAVELET_ALPHA = 0.6;
+const WAVELET_FADE_START = 1;
+const WAVELET_FADE_END = 3;
+
 const state = {
   geo: 'A',        // 'A' sphere caps, 'B' flat arrays with drive delays, 'C' plate + reflector
   view: 'wave',    // 'wave' (wavelets and envelope) or 'field' (pressure amplitude)
@@ -965,27 +970,33 @@ function clipHalf(ctx, h) {
 function drawWavelets(ctx, h, t) {
   // Every source re-emits a circular wavefront each period T, starting at its
   // delay e; emission m has radius c (t - e - m T).
+  // A wavelet fades with its radius: full strength up to 1 λ, fading over
+  // 1–3 λ, gone beyond 3 λ (WAVELET_FADE_START, WAVELET_FADE_END).
   ctx.save();
   clipHalf(ctx, h);
-  ctx.beginPath();
+  ctx.strokeStyle = halfColor(h);
+  ctx.lineWidth = 1.2;
   for (const s of h.src) {
     const age = t - s.e;
     if (age <= 0) continue;
-    const rFar = farthestCorner(s.x, s.y);
+    const rMaxMm = Math.min(farthestCorner(s.x, s.y), WAVELET_FADE_END * LAMBDA);
     const mHi = Math.floor(age / PERIOD);
-    const mLo = Math.max(0, Math.ceil((age - rFar / C_AIR) / PERIOD));
+    const mLo = Math.max(0, Math.ceil((age - rMaxMm / C_AIR) / PERIOD));
     const cx = sx(s.x), cy = sy(s.y);
     for (let k = mLo; k <= mHi; k++) {
-      const r = C_AIR * (age - k * PERIOD) * PX_PER_MM;
+      const rMm = C_AIR * (age - k * PERIOD);
+      const r = rMm * PX_PER_MM;
       if (r < 0.5) continue;
-      ctx.moveTo(cx + r, cy);
+      const u = rMm / LAMBDA;
+      let a = 1;
+      if (u >= WAVELET_FADE_END) continue;
+      if (u > WAVELET_FADE_START) a = (WAVELET_FADE_END - u) / (WAVELET_FADE_END - WAVELET_FADE_START);
+      ctx.globalAlpha = WAVELET_ALPHA * a;
+      ctx.beginPath();
       ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+      ctx.stroke();
     }
   }
-  ctx.globalAlpha = 0.5;
-  ctx.strokeStyle = halfColor(h);
-  ctx.lineWidth = 1.2;
-  ctx.stroke();
   ctx.restore();
 }
 
@@ -1232,6 +1243,25 @@ function updateControls() {
   syncTime();
 }
 
+// Initial state from the URL, so that each slide opens on its own view:
+//   ?geo=A|B|C  &view=wave|field  &phase=<deg>  &fx=<mm>  &fy=<mm>  &t=<µs>  &play=1
+(function initFromUrl() {
+  const q = new URLSearchParams(window.location.search);
+  const geo = (q.get('geo') || '').toUpperCase();
+  if (geo === 'A' || geo === 'B' || geo === 'C') state.geo = geo;
+  const view = q.get('view');
+  if (view === 'wave' || view === 'field') state.view = view;
+  const num = (key, lo, hi) => {
+    const v = Number(q.get(key));
+    return q.has(key) && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : null;
+  };
+  const ph = num('phase', 0, 360); if (ph !== null) state.phaseDeg = ph;
+  const fx = num('fx', -10, 10); if (fx !== null) state.fx = fx;
+  const fy = num('fy', -10, 10); if (fy !== null) state.fy = fy;
+  const t = num('t', 0, 600); if (t !== null) state.t = t;
+  state.autoplay = q.get('play') === '1';
+})();
+
 let model = buildModel();
 
 function onParamsChanged() {
@@ -1308,6 +1338,7 @@ window.addEventListener('load', fitStage);
 barInfo.textContent = Math.round(FREQ * 1000) + ' kHz，λ = ' + LAMBDA.toFixed(1) + ' mm';
 updateControls();
 fitStage();
+if (state.autoplay) setPlaying(true);
 </script>
 </body>
 </html>
