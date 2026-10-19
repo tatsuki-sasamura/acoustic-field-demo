@@ -45,6 +45,20 @@
     padding: 8px;
   }
 
+  /* Portrait (phone) layout: a 540 x 960 stage, the view above the panel. */
+  #stage.portrait {
+    width: 540px;
+    height: 960px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 100px 420px minmax(0, 1fr);
+  }
+  #stage.portrait #topbar { grid-column: 1; flex-wrap: wrap; justify-content: center; row-gap: 6px; }
+  #stage.portrait #viewBox { grid-row: 2; grid-column: 1; }
+  #stage.portrait #panel { grid-row: 3; grid-column: 1; }
+  #stage.portrait .seg .opt { font-size: 15px; padding: 0 7px; }
+  #stage.portrait #topbar, #stage.portrait #panel, #stage.portrait #viewBox { min-width: 0; }
+  #stage.portrait .ctl { grid-template-columns: 112px 1fr 92px; height: 40px; }
+
   /* ---------- top bar: geometry radios + view toggle ---------- */
   #topbar {
     grid-column: 1 / 3;
@@ -179,19 +193,22 @@
     justify-content: center;
     cursor: pointer;
   }
+  #topRight { display: flex; align-items: center; gap: 8px; }
   #gear {
-    width: 28px;
-    height: 28px;
-    margin-left: 2px;
+    width: 44px;
+    height: 44px;
+    margin-left: 0;
     padding: 0;
     border: 1px solid var(--accent);
     border-radius: 8px;
     background: #ffffff;
     color: var(--accent);
-    font-size: 18px;
+    font-size: 26px;
     line-height: 1;
     cursor: pointer;
     vertical-align: middle;
+    border-width: 2px;
+    border-radius: 10px;
   }
   #gear[aria-expanded="true"] { background: var(--accent); color: #ffffff; }
   #fadePop {
@@ -297,9 +314,12 @@
       <label><input type="radio" name="geo" value="B"><span class="opt"><span class="dot"></span>平面アレイ（信号）</span></label>
       <label><input type="radio" name="geo" value="C"><span class="opt"><span class="dot"></span>ホログラム（板の厚み）</span></label>
     </div>
-    <div class="seg" role="group" aria-label="表示">
-      <button type="button" class="opt" id="btnWave" aria-pressed="true">素元波と包絡面</button>
-      <button type="button" class="opt" id="btnField" aria-pressed="false">音圧分布</button>
+    <div id="topRight">
+      <div class="seg" role="group" aria-label="表示">
+        <button type="button" class="opt" id="btnWave" aria-pressed="true">素元波と包絡面</button>
+        <button type="button" class="opt" id="btnField" aria-pressed="false">音圧分布</button>
+      </div>
+      <button type="button" id="gear" aria-label="設定" aria-expanded="false">&#9881;</button>
     </div>
   </div>
 
@@ -325,7 +345,7 @@
       <span class="lab">
         <button type="button" id="play" aria-label="再生">
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path id="playIcon" d="M7 4.5 L19.5 12 L7 19.5 Z" fill="currentColor"></path></svg>
-        </button>時刻<button type="button" id="gear" aria-label="素元波の減衰の設定" aria-expanded="false">&#9881;</button>
+        </button>時刻
       </span>
       <input type="range" id="time" min="0" max="600" step="0.5" value="150" aria-label="時刻">
       <output id="timeVal">150.0 µs</output>
@@ -799,10 +819,13 @@ function sizeCanvas(cv) {
 
 function fitStage() {
   const W = window.innerWidth || 960, H = window.innerHeight || 540;
-  stageScale = Math.min(W / 960, H / 540);
+  const portrait = H > W;                 // phone held upright: 540 x 960 stage
+  stage.classList.toggle('portrait', portrait);
+  const SW = portrait ? 540 : 960, SH = portrait ? 960 : 540;
+  stageScale = Math.min(W / SW, H / SH);
   if (!isFinite(stageScale) || stageScale <= 0) stageScale = 1;
-  const ox = Math.max(0, (W - 960 * stageScale) / 2);
-  const oy = Math.max(0, (H - 540 * stageScale) / 2);
+  const ox = Math.max(0, (W - SW * stageScale) / 2);
+  const oy = Math.max(0, (H - SH * stageScale) / 2);
   stage.style.transform = 'translate(' + ox + 'px, ' + oy + 'px) scale(' + stageScale + ')';
   layoutView();
   sizeCanvas(viewCanvas);
@@ -928,7 +951,7 @@ function drawLegend(ctx, m) {
     sample(4.5, 1); label(m.geo === 'C' ? '波面' : '包絡面'); x += 18;
     dot(ctx, x + 6, cy, 6, COL.low); x += 16; label('下'); x += 14;
     dot(ctx, x + 6, cy, 6, COL.up); x += 16; label(m.geo === 'C' ? '反射' : '上');
-    if (m.geo === 'B') { x += 14; sample(5, 0.9); label('発射の遅れ'); }
+    if (m.geo === 'B') { x += 12; sample(5, 0.9); label('遅れ'); }
   } else {
     label('振幅'); x += 8;
     label('0'); x += 6;
