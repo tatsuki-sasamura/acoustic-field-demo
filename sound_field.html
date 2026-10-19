@@ -428,7 +428,8 @@ const PITCH      = 2 * APERTURE / (N_LINE - 1);    // element pitch of the flat 
 
 // Hologram plate (C). Sound is faster in the plate than in air, so a plate of
 // thickness h lets the wave arrive earlier by h (1/c_air - 1/c_plate).
-const C_PLATE      = 2.5;                              // 2500 m/s (typical 3D-printing resin)
+const C_PLATE_RATIO = 2.5 / 0.343;                     // plate / air sound-speed ratio (2500 / 343): the plate shape is then independent of the air speed
+let   C_PLATE      = 2.5;                              // 2500 m/s (typical 3D-printing resin)
 let   PLATE_PER_US = 1 / (1 / C_AIR - 1 / C_PLATE);    // plate thickness per µs of advance [mm/µs]
 const PLATE_BASE   = 2;                                // thinnest part of the plate [mm]
 
@@ -1512,6 +1513,7 @@ const efade0In = $('efade0'), efade1In = $('efade1'), efade0Out = $('efade0Val')
 function setSoundSpeed(ms) {
   // The wavelength is kept fixed (the device geometry is drawn in wavelengths); the frequency follows.
   C_AIR = ms / 1000;                                   // mm/µs
+  C_PLATE = C_AIR * C_PLATE_RATIO;                      // the plate's speed scales with it, so h(x) is unchanged
   FREQ = C_AIR / LAMBDA;
   PERIOD = 1 / FREQ;
   OMEGA = 2 * Math.PI * FREQ;
