@@ -51,7 +51,8 @@
     grid-template-rows: auto minmax(160px, 1fr) auto;
   }
   #stage.portrait #barBox { flex: none; height: 150px; }
-  #stage.portrait #fadePop:not([hidden]) ~ #barHead, #stage.portrait #fadePop:not([hidden]) ~ #barBox { display: none; }
+  #fadePop:not([hidden]) ~ #barHead, #fadePop:not([hidden]) ~ #barBox { display: none; }
+  #panel { overflow-y: auto; }
   #barBox { max-height: 280px; }
   #stage.portrait #topbar { grid-column: 1; flex-wrap: wrap; justify-content: center; row-gap: 6px; }
   #stage.portrait #viewBox { grid-row: 2; grid-column: 1; }
