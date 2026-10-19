@@ -179,6 +179,30 @@
     justify-content: center;
     cursor: pointer;
   }
+  #gear {
+    width: 30px;
+    height: 30px;
+    margin-left: 6px;
+    padding: 0;
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    background: #ffffff;
+    color: var(--accent);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    vertical-align: middle;
+  }
+  #gear[aria-expanded="true"] { background: var(--accent); color: #ffffff; }
+  #fadePop {
+    border: 1px solid var(--accent);
+    border-radius: 10px;
+    padding: 4px 10px;
+    margin: 2px 0 6px;
+    background: #ffffff;
+    flex: none;
+  }
+  #fadePop .ctl { height: 36px; }
   #play:disabled { cursor: default; }
   #play:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
@@ -285,7 +309,24 @@
         </button>時刻
       </span>
       <input type="range" id="time" min="0" max="600" step="0.5" value="150" aria-label="時刻">
-      <output id="timeVal">150.0 µs</output>
+      <output id="timeVal">150.0 µs<button type="button" id="gear" aria-label="素元波の減衰の設定" aria-expanded="false">&#9881;</button></output>
+    </div>
+    <div id="fadePop" hidden>
+      <div class="ctl" id="rowFade0">
+        <span class="lab">消え始め</span>
+        <input type="range" id="fade0" min="0" max="6" step="0.25" value="1" aria-label="素元波が消え始める距離 (波長)">
+        <output id="fade0Val">1.0 λ</output>
+      </div>
+      <div class="ctl" id="rowFade1">
+        <span class="lab">消える</span>
+        <input type="range" id="fade1" min="0.25" max="8" step="0.25" value="3" aria-label="素元波が完全に消える距離 (波長)">
+        <output id="fade1Val">3.0 λ</output>
+      </div>
+      <div class="ctl" id="rowFadeA">
+        <span class="lab">濃さ</span>
+        <input type="range" id="fadeA" min="0.1" max="1" step="0.05" value="0.6" aria-label="素元波の濃さ">
+        <output id="fadeAVal">0.60</output>
+      </div>
     </div>
 
     <div id="barHead">
@@ -364,10 +405,11 @@ const CAPTIONS = {
 /* =====================================================================
    2. State
    ===================================================================== */
-// Wavelet fading, in wavelengths from the source.
-const WAVELET_ALPHA = 0.6;
-const WAVELET_FADE_START = 1;
-const WAVELET_FADE_END = 3;
+// Wavelet fading, in wavelengths from the source (adjustable from the ⚙ panel
+// and from the URL: ?fade0=1&fade1=3&alpha=0.6).
+let WAVELET_ALPHA = 0.6;
+let WAVELET_FADE_START = 1;
+let WAVELET_FADE_END = 3;
 
 const state = {
   geo: 'A',        // 'A' sphere caps, 'B' flat arrays with drive delays, 'C' plate + reflector
@@ -1259,8 +1301,41 @@ function updateControls() {
   const fx = num('fx', -10, 10); if (fx !== null) state.fx = fx;
   const fy = num('fy', -10, 10); if (fy !== null) state.fy = fy;
   const t = num('t', 0, 600); if (t !== null) state.t = t;
+  const f0 = num('fade0', 0, 6); if (f0 !== null) WAVELET_FADE_START = f0;
+  const f1 = num('fade1', 0.25, 8); if (f1 !== null) WAVELET_FADE_END = f1;
+  const al = num('alpha', 0.1, 1); if (al !== null) WAVELET_ALPHA = al;
+  if (WAVELET_FADE_END <= WAVELET_FADE_START) WAVELET_FADE_END = WAVELET_FADE_START + 0.25;
   state.autoplay = q.get('play') === '1';
 })();
+
+/* ---------- wavelet fading controls (⚙) ---------- */
+const gearBtn = $('gear'), fadePop = $('fadePop');
+const fade0In = $('fade0'), fade1In = $('fade1'), fadeAIn = $('fadeA');
+const fade0Out = $('fade0Val'), fade1Out = $('fade1Val'), fadeAOut = $('fadeAVal');
+
+function syncFade() {
+  fade0In.value = WAVELET_FADE_START; fade0Out.textContent = WAVELET_FADE_START.toFixed(2).replace(/\.?0+$/, '') + ' λ';
+  fade1In.value = WAVELET_FADE_END; fade1Out.textContent = WAVELET_FADE_END.toFixed(2).replace(/\.?0+$/, '') + ' λ';
+  fadeAIn.value = WAVELET_ALPHA; fadeAOut.textContent = WAVELET_ALPHA.toFixed(2);
+}
+gearBtn.addEventListener('click', () => {
+  const open = fadePop.hidden;
+  fadePop.hidden = !open;
+  gearBtn.setAttribute('aria-expanded', String(open));
+  fitStage();
+});
+fade0In.addEventListener('input', () => {
+  WAVELET_FADE_START = Number(fade0In.value);
+  if (WAVELET_FADE_END <= WAVELET_FADE_START) WAVELET_FADE_END = WAVELET_FADE_START + 0.25;
+  syncFade(); requestRender();
+});
+fade1In.addEventListener('input', () => {
+  WAVELET_FADE_END = Number(fade1In.value);
+  if (WAVELET_FADE_START >= WAVELET_FADE_END) WAVELET_FADE_START = Math.max(0, WAVELET_FADE_END - 0.25);
+  syncFade(); requestRender();
+});
+fadeAIn.addEventListener('input', () => { WAVELET_ALPHA = Number(fadeAIn.value); syncFade(); requestRender(); });
+syncFade();
 
 let model = buildModel();
 
