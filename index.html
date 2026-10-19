@@ -392,7 +392,7 @@ let   FREQ   = 0.040;                  // drive frequency: 40 kHz = 0.040 cycles
 let   PERIOD = 1 / FREQ;               // T = 25 µs
 let   LAMBDA = C_AIR / FREQ;           // λ = 8.575 mm
 const K_WAVE = 2 * Math.PI / LAMBDA;   // wavenumber k [rad/mm]
-const OMEGA  = 2 * Math.PI * FREQ;     // angular frequency ω [rad/µs]
+let   OMEGA  = 2 * Math.PI * FREQ;     // angular frequency ω [rad/µs]
 
 // Device geometry. All three devices share the same aperture: half-width
 // APERTURE, seen from the centre under the half-angle HALF_ANGLE. The flat
@@ -551,17 +551,35 @@ function buildModel() {
       // drive into the same per-element delays as in B (modelled as such).
       // A rigid flat reflector at y = +LINE_Y closes the standing wave; it is
       // modelled by image sources mirrored at the reflector (same phase).
+      // The plate is driven uniformly at its bottom (y = -Y) at t = 0. Inside the
+      // plate the front rises at C_PLATE; at x it leaves the top surface at
+      // time h(x)/C_PLATE from the point (x, -Y + h(x)) and then travels in air.
+      // The thickness h(x) is chosen so that every exit point's wave reaches F
+      // at the same time T0:  h/C_PLATE + |(x, -Y+h) - F| / C_AIR = T0,
+      // with the thinnest part of the plate at PLATE_BASE.
+      const xa = -APERTURE - PITCH / 2, xb = APERTURE + PITCH / 2;
+      const arrival = (x, h) => h / C_PLATE + Math.hypot(x - F.x, -Y + h - F.y) / C_AIR;
+      let T0 = Infinity;
+      for (let i = 0; i <= 200; i++) T0 = Math.min(T0, arrival(xa + (xb - xa) * i / 200, PLATE_BASE));
+      const thick = (x) => {
+        if (arrival(x, PLATE_BASE) <= T0 + 1e-9) return PLATE_BASE;
+        let lo = PLATE_BASE, hi = PLATE_BASE + 80;       // arrival() decreases with h (C_PLATE > C_AIR)
+        for (let it = 0; it < 40; it++) {
+          const mid = 0.5 * (lo + hi);
+          if (arrival(x, mid) > T0) lo = mid; else hi = mid;
+        }
+        return 0.5 * (lo + hi);
+      };
+      const N_C = 33;                                    // virtual sources along the plate's top surface
+      const xc = [];
+      for (let j = 0; j < N_C; j++) xc.push(xa + (xb - xa) * (j + 0.5) / N_C);
+      const lowC = xc.map(x => ({ x, y: -Y + thick(x), e: thick(x) / C_PLATE }));
       const yr = Y;
-      const img = low.map(s => ({ x: s.x, y: 2 * yr - s.y, e: s.e }));
+      const img = lowC.map(s => ({ x: s.x, y: 2 * yr - s.y, e: s.e }));
       const Fimg = { x: F.x, y: 2 * yr - F.y };
-      m.halves.push(makeHalf('low', low, F, -Y, yr));
+      m.halves.push(makeHalf('low', lowC, F, -Y, yr));
       m.halves.push(makeHalf('img', img, Fimg, -Y, yr));
       m.reflectorY = yr;
-      // Thickness profile: thicker where the delay must be shorter.
-      // h(x) = h0 + (tau_ref - tau(x)) / (1/c_air - 1/c_plate)
-      const xa = -APERTURE - PITCH / 2, xb = APERTURE + PITCH / 2;
-      const tauRef = tauLow(Math.min(xb, Math.max(xa, F.x)));   // largest delay on the plate
-      const thick = (x) => PLATE_BASE + PLATE_PER_US * (tauRef - tauLow(x));
       m.plate = { x0: xa, x1: xb, h: thick };
       m.bars = { xs, vals: xs.map(thick), curve: thick, x0: xa, x1: xb, unit: 'mm' };
       m.key = 'C|' + F.x + '|' + F.y + '|' + C_AIR;
@@ -571,11 +589,13 @@ function buildModel() {
   // Shift all emission times so that the earliest emission happens at t = 0.
   let eMin = Infinity;
   for (const h of m.halves) for (const s of h.src) eMin = Math.min(eMin, s.e);
+  if (m.geo === 'C') eMin = 0;   // C: t = 0 is the moment the drive enters the plate
   for (const h of m.halves) {
     for (const s of h.src) s.e -= eMin;
     h.tArr -= eMin;
     h.eMin -= eMin;
   }
+  m.tEntry = -eMin;        // time at which the drive enters the plate (C): the earliest exit is at t = 0
   return m;
 }
 
@@ -904,8 +924,8 @@ function drawLegend(ctx, m) {
   };
 
   if (state.view === 'wave') {
-    sample(1.5, 0.8); label('素元波'); x += 16;
-    sample(4.5, 1); label('包絡面'); x += 18;
+    if (m.geo !== 'C') { sample(1.5, 0.8); label('素元波'); x += 16; }
+    sample(4.5, 1); label(m.geo === 'C' ? '波面' : '包絡面'); x += 18;
     dot(ctx, x + 6, cy, 6, COL.low); x += 16; label('下'); x += 14;
     dot(ctx, x + 6, cy, 6, COL.up); x += 16; label(m.geo === 'C' ? '反射' : '上');
     if (m.geo === 'B') { x += 14; sample(5, 0.9); label('発射の遅れ'); }
@@ -1023,9 +1043,11 @@ function drawDevice(ctx, m) {
     ctx.globalAlpha = 1;
   }
   // Real sources only (the image sources of C are not drawn).
-  for (const h of m.halves) {
-    if (h.kind === 'img') continue;
-    for (const s of h.src) dot(ctx, sx(s.x), sy(s.y), 5.5, halfColor(h));
+  if (m.geo !== 'C') {
+    for (const h of m.halves) {
+      if (h.kind === 'img') continue;
+      for (const s of h.src) dot(ctx, sx(s.x), sy(s.y), 5.5, halfColor(h));
+    }
   }
   if (m.geo === 'C') {
     haloText(ctx, '反射板', sx(X_HALF) - 8, sy(m.reflectorY) + 6, 'right', 'top', COL.reflectorEdge);
@@ -1159,6 +1181,34 @@ function drawEnvelopes(ctx, h, t, pass) {
   ctx.restore();
 }
 
+function drawPlateFronts(ctx, m, t, pass) {
+  // Front of emission k inside the plate: y = -Y + C_PLATE (t - kT - tEntry), drawn where it is still below the top surface.
+  const Y = LINE_Y, pl = m.plate;
+  const kHi = Math.floor((t - m.tEntry) / PERIOD);
+  ctx.save();
+  platePath(ctx, pl);
+  ctx.clip();
+  ctx.lineCap = 'round';
+  if (pass === 'halo') { ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)'; ctx.lineWidth = 8; }
+  else { ctx.strokeStyle = COL.low; ctx.lineWidth = 4; }
+  const n = 240;
+  for (let k = 0; k <= kHi; k++) {
+    const sPl = t - k * PERIOD - m.tEntry;
+    if (sPl <= 0) continue;
+    const yF = -Y + C_PLATE * sPl;
+    ctx.beginPath();
+    let pen = false;
+    for (let i = 0; i <= n; i++) {
+      const x = pl.x0 + (pl.x1 - pl.x0) * i / n;
+      if (yF < -Y + pl.h(x)) {
+        if (!pen) { ctx.moveTo(sx(x), sy(yF)); pen = true; } else ctx.lineTo(sx(x), sy(yF));
+      } else pen = false;
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 /* ---------- view 2: pressure amplitude ---------- */
 function drawNodes(ctx, m, nodes) {
   ctx.save();
@@ -1189,8 +1239,10 @@ function renderView() {
   }
   drawAxis(ctx);
   if (state.view === 'wave') {
-    for (const h of m.halves) drawWavelets(ctx, h, state.t);
+    if (m.geo !== 'C') for (const h of m.halves) drawWavelets(ctx, h, state.t);
+    if (m.geo === 'C') drawPlateFronts(ctx, m, state.t, 'halo');
     for (const h of m.halves) drawEnvelopes(ctx, h, state.t, 'halo');
+    if (m.geo === 'C') drawPlateFronts(ctx, m, state.t, 'line');
     for (const h of m.halves) drawEnvelopes(ctx, h, state.t, 'line');
   }
   drawDevice(ctx, m);
@@ -1439,6 +1491,7 @@ function setSoundSpeed(ms) {
   C_AIR = ms / 1000;                                   // mm/µs
   FREQ = C_AIR / LAMBDA;
   PERIOD = 1 / FREQ;
+  OMEGA = 2 * Math.PI * FREQ;
   PLATE_PER_US = 1 / (1 / C_AIR - 1 / C_PLATE);
 }
 function syncPhys() {
