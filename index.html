@@ -1278,12 +1278,15 @@ function renderView() {
   drawAxis(ctx);
   if (state.view === 'wave') {
     if (m.geo !== 'C') for (const h of m.halves) drawWavelets(ctx, h, state.t);
-    if (m.geo === 'C') drawPlateFronts(ctx, m, state.t, 'halo');
     for (const h of m.halves) drawEnvelopes(ctx, h, state.t, 'halo');
-    if (m.geo === 'C') drawPlateFronts(ctx, m, state.t, 'line');
     for (const h of m.halves) drawEnvelopes(ctx, h, state.t, 'line');
   }
   drawDevice(ctx, m);
+  if (state.view === 'wave' && m.geo === 'C') {
+    // The fronts inside the plate are drawn over the plate body (it is filled opaque).
+    drawPlateFronts(ctx, m, state.t, 'halo');
+    drawPlateFronts(ctx, m, state.t, 'line');
+  }
   drawFocus(ctx, m);
   if (state.view === 'field') drawNodes(ctx, m, fieldCache.nodes);
   drawBorder(ctx);
