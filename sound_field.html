@@ -388,7 +388,7 @@
       </div>
       <div class="ctl" id="rowCr">
         <span class="lab">板の音速比</span>
-        <input type="range" id="cr" min="1.2" max="15" step="0.1" value="7.3" aria-label="ホログラム板の音速 ÷ 空気の音速">
+        <input type="range" id="cr" min="2" max="15" step="0.1" value="7.3" aria-label="ホログラム板の音速 ÷ 空気の音速">
         <output id="crVal">7.3</output>
       </div>
       <div class="ctl" id="rowTmax">
@@ -589,18 +589,54 @@ function buildModel() {
       // at the same time T0:  h/C_PLATE + |(x, -Y+h) - F| / C_AIR = T0,
       // with the thinnest part of the plate at PLATE_BASE.
       const xa = -APERTURE - PITCH / 2, xb = APERTURE + PITCH / 2;
-      const arrival = (x, h) => h / C_PLATE + Math.hypot(x - F.x, -Y + h - F.y) / C_AIR;
-      let T0 = Infinity;
-      for (let i = 0; i <= 200; i++) T0 = Math.min(T0, arrival(xa + (xb - xa) * i / 200, PLATE_BASE));
-      const thick = (x) => {
-        if (arrival(x, PLATE_BASE) <= T0 + 1e-9) return PLATE_BASE;
-        let lo = PLATE_BASE, hi = Math.max(PLATE_BASE + 0.5, Y + F.y - 2);   // exit point kept below the focus; arrival() decreases with h there
-        for (let it = 0; it < 40; it++) {
-          const mid = 0.5 * (lo + hi);
-          if (arrival(x, mid) > T0) lo = mid; else hi = mid;
+      // Design for a focus G. Every x has an achievable arrival interval: the latest
+      // with the thinnest plate, the earliest at the thickness that minimises the
+      // arrival (below the focus). A common T0 exists only if the earliest of every x
+      // is not later than the latest of the x nearest to the focus. If it is not, the
+      // focus is pulled towards the centre (state.fx, state.fy are overwritten, so the
+      // sliders show the focus actually used).
+      const designFor = (G) => {
+        const arrival = (x, h) => h / C_PLATE + Math.hypot(x - G.x, -Y + h - G.y) / C_AIR;
+        const hMax = Math.max(PLATE_BASE + 0.5, 0.85 * (Y + G.y));          // exit points stay well below the focus
+        const hArgMin = (x) => {                                            // thickness of the earliest arrival for this x
+          let best = PLATE_BASE, bv = arrival(x, PLATE_BASE);
+          for (let k = 1; k <= 60; k++) {
+            const h = PLATE_BASE + (hMax - PLATE_BASE) * k / 60, v = arrival(x, h);
+            if (v < bv) { bv = v; best = h; }
+          }
+          return { h: best, v: bv };
+        };
+        let T0 = Infinity, needed = -Infinity;
+        for (let i = 0; i <= 120; i++) {
+          const x = xa + (xb - xa) * i / 120;
+          T0 = Math.min(T0, arrival(x, PLATE_BASE));
+          needed = Math.max(needed, hArgMin(x).v);
         }
-        return 0.5 * (lo + hi);
+        const feasible = needed <= T0 + 1e-9;
+        const thick = (x) => {
+          if (arrival(x, PLATE_BASE) <= T0 + 1e-9) return PLATE_BASE;
+          let lo = PLATE_BASE, hi = hArgMin(x).h;                           // arrival() decreases on [base, argmin]
+          for (let it = 0; it < 40; it++) {
+            const mid = 0.5 * (lo + hi);
+            if (arrival(x, mid) > T0) lo = mid; else hi = mid;
+          }
+          return 0.5 * (lo + hi);
+        };
+        return { feasible, thick };
       };
+      let des = designFor(F);
+      if (!des.feasible) {
+        let lo = 0, hi = 1;                                                 // largest s with s*(fx, fy) feasible
+        for (let it = 0; it < 24; it++) {
+          const mid = 0.5 * (lo + hi);
+          if (designFor({ x: mid * F.x, y: mid * F.y }).feasible) lo = mid; else hi = mid;
+        }
+        F.x = Math.round(lo * F.x * 2) / 2; F.y = Math.round(lo * F.y * 2) / 2;
+        state.fx = F.x; state.fy = F.y;
+        des = designFor(F);
+        if (!des.feasible) { F.x = 0; F.y = 0; state.fx = 0; state.fy = 0; des = designFor(F); }
+      }
+      const thick = des.thick;
       const N_C = 33;                                    // virtual sources along the plate's top surface
       const xc = [];
       for (let j = 0; j < N_C; j++) xc.push(xa + (xb - xa) * (j + 0.5) / N_C);
@@ -1524,7 +1560,7 @@ loadSaved();
   const e0 = num('efade0', 0, 20); if (e0 !== null) ENV_FADE_START = e0;
   const e1 = num('efade1', 0.5, 24); if (e1 !== null) ENV_FADE_END = e1;
   if (ENV_FADE_END <= ENV_FADE_START) ENV_FADE_END = ENV_FADE_START + 0.5;
-  const cr = num('cr', 1.2, 15); if (cr !== null) C_PLATE_RATIO = cr;
+  const cr = num('cr', 2, 15); if (cr !== null) C_PLATE_RATIO = cr;
   const cs = num('c', 100, 1600); if (cs !== null) setSoundSpeed(cs);
   C_PLATE = C_AIR * C_PLATE_RATIO; PLATE_PER_US = 1 / (1 / C_AIR - 1 / C_PLATE);
   const tm = num('tmax', 100, 3000); if (tm !== null) T_END = tm;
