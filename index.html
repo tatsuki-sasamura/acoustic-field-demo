@@ -35,23 +35,24 @@
     position: absolute;
     left: 0;
     top: 0;
-    width: 960px;
+    width: 960px;                 /* set by fitStage() to the viewport divided by the scale */
     height: 540px;
     transform-origin: 0 0;
     display: grid;
-    grid-template-columns: 470px 1fr;
-    grid-template-rows: 48px 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(380px, 470px);
+    grid-template-rows: 48px minmax(0, 1fr);
     gap: 8px;
     padding: 8px;
   }
 
   /* Portrait (phone) layout: a 540 x 960 stage, the view above the panel. */
   #stage.portrait {
-    width: 540px;
-    height: 960px;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: 100px 420px minmax(0, 1fr);
+    grid-template-rows: auto minmax(160px, 1fr) auto;
   }
+  #stage.portrait #barBox { flex: none; height: 150px; }
+  #stage.portrait #fadePop:not([hidden]) ~ #barHead, #stage.portrait #fadePop:not([hidden]) ~ #barBox { display: none; }
+  #barBox { max-height: 280px; }
   #stage.portrait #topbar { grid-column: 1; flex-wrap: wrap; justify-content: center; row-gap: 6px; }
   #stage.portrait #viewBox { grid-row: 2; grid-column: 1; }
   #stage.portrait #panel { grid-row: 3; grid-column: 1; }
@@ -387,7 +388,7 @@
         <output id="tmaxVal">600 µs</output>
       </div>
       <div class="ctl" id="rowUrl">
-        <span class="lab">この設定の URL</span>
+        <span class="lab">設定の URL</span>
         <input type="text" id="urlBox" readonly aria-label="現在の設定を含む URL">
         <button type="button" id="copyUrl">コピー</button>
       </div>
@@ -819,15 +820,21 @@ function sizeCanvas(cv) {
 }
 
 function fitStage() {
-  const W = window.innerWidth || 960, H = window.innerHeight || 540;
-  const portrait = H > W;                 // phone held upright: 540 x 960 stage
+  // The stage fills the visible viewport exactly. Its scale is chosen so that the
+  // layout keeps a readable size: landscape stages are at least 760 x 540 design px,
+  // portrait stages at least 540 x 700; the stage then gets the viewport's aspect.
+  const vv = window.visualViewport;
+  const W = (vv && vv.width) || window.innerWidth || 960;
+  const H = (vv && vv.height) || window.innerHeight || 540;
+  const portrait = H > W;
   stage.classList.toggle('portrait', portrait);
-  const SW = portrait ? 540 : 960, SH = portrait ? 960 : 540;
-  stageScale = Math.min(W / SW, H / SH);
+  const minW = portrait ? 540 : 914, minH = portrait ? 700 : 540;
+  stageScale = Math.min(W / minW, H / minH, 1.6);
   if (!isFinite(stageScale) || stageScale <= 0) stageScale = 1;
-  const ox = Math.max(0, (W - SW * stageScale) / 2);
-  const oy = Math.max(0, (H - SH * stageScale) / 2);
-  stage.style.transform = 'translate(' + ox + 'px, ' + oy + 'px) scale(' + stageScale + ')';
+  const SW = W / stageScale, SH = H / stageScale;
+  stage.style.width = SW + 'px';
+  stage.style.height = SH + 'px';
+  stage.style.transform = 'scale(' + stageScale + ')';
   layoutView();
   sizeCanvas(viewCanvas);
   sizeCanvas(barCanvas);
@@ -977,8 +984,15 @@ function drawLegend(ctx, m) {
     label('節');
   }
 
-  // Scale bar (20 mm) at the right end of the strip.
-  const L = 20 * PX_PER_MM, xr = VIEW_W - 16, xl = xr - L, yb = cy + 10;
+  // Scale bar (20 mm): at the right end of the strip when the legend leaves room,
+  // otherwise inside the plot's lower-right corner on a white backing.
+  const L = 20 * PX_PER_MM;
+  let xr = VIEW_W - 16, xl = xr - L, yb = cy + 10;
+  if (xl < x + 24) {
+    xr = PLOT.x + PLOT.w - 12; xl = xr - L; yb = PLOT.y + PLOT.h - 12;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.fillRect(xl - 10, yb - 32, L + 20, 42);
+  }
   ctx.strokeStyle = COL.ink;
   ctx.lineWidth = 2.5;
   ctx.lineCap = 'butt';
@@ -1643,6 +1657,7 @@ timeIn.addEventListener('input', () => {
 });
 playBtn.addEventListener('click', () => setPlaying(!state.playing));
 window.addEventListener('resize', fitStage);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', fitStage);
 window.addEventListener('load', fitStage);
 
 /* ---------- start ---------- */
