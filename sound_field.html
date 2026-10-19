@@ -359,6 +359,11 @@
       <input type="range" id="fy" min="-10" max="10" step="0.5" value="0" aria-label="焦点 Y">
       <output id="fyVal">0.0 mm</output>
     </div>
+    <div class="ctl" id="rowRefl">
+      <span class="lab">反射板の高さ</span>
+      <input type="range" id="refl" min="0" max="45" step="0.5" value="4.3" aria-label="反射板の高さ (焦点からの距離)">
+      <output id="reflVal">+4.3 mm</output>
+    </div>
     <div class="ctl" id="rowTime">
       <span class="lab">
         <button type="button" id="play" aria-label="再生">
@@ -513,6 +518,7 @@ const state = {
   phaseDeg: 0,     // phase difference upper vs lower half [deg] (A, B)
   fx: 0,           // focus position [mm] (B, C)
   fy: 0,
+  refl: 4.3,       // C: height of the flat reflector above the focus [mm] (λ/2 by default)
   t: 150,          // time [µs] in the wavelet view
   playing: false,
 };
@@ -659,7 +665,7 @@ function buildModel() {
       const xc = [];
       for (let j = 0; j < N_C; j++) xc.push(xa + (xb - xa) * (j + 0.5) / N_C);
       const lowC = xc.map(x => ({ x, y: -Y + thick(x), e: thick(x) / C_PLATE }));
-      const yr = Y;
+      const yr = Math.min(Y, F.y + Math.max(0, state.refl));
       const img = lowC.map(s => ({ x: s.x, y: 2 * yr - s.y, e: s.e }));
       const Fimg = { x: F.x, y: 2 * yr - F.y };
       m.halves.push(makeHalf('low', lowC, F, -Y, yr));
@@ -667,7 +673,7 @@ function buildModel() {
       m.reflectorY = yr;
       m.plate = { x0: xa, x1: xb, h: thick };
       m.bars = { xs, vals: xs.map(thick), curve: thick, x0: xa, x1: xb, unit: 'mm' };
-      m.key = 'C|' + F.x + '|' + F.y + '|' + C_AIR + '|' + C_PLATE_RATIO;
+      m.key = 'C|' + F.x + '|' + F.y + '|' + C_AIR + '|' + C_PLATE_RATIO + '|' + yr;
     }
   }
 
@@ -1467,9 +1473,9 @@ function renderBars() {
    ===================================================================== */
 const geoRadios = Array.from(document.querySelectorAll('input[name="geo"]'));
 const btnWave = $('btnWave'), btnField = $('btnField');
-const phaseIn = $('phase'), fxIn = $('fx'), fyIn = $('fy'), timeIn = $('time');
-const phaseOut = $('phaseVal'), fxOut = $('fxVal'), fyOut = $('fyVal'), timeOut = $('timeVal');
-const rowPhase = $('rowPhase'), rowFx = $('rowFx'), rowFy = $('rowFy'), rowTime = $('rowTime');
+const phaseIn = $('phase'), fxIn = $('fx'), fyIn = $('fy'), timeIn = $('time'), reflIn = $('refl');
+const phaseOut = $('phaseVal'), fxOut = $('fxVal'), fyOut = $('fyVal'), timeOut = $('timeVal'), reflOut = $('reflVal');
+const rowPhase = $('rowPhase'), rowFx = $('rowFx'), rowFy = $('rowFy'), rowTime = $('rowTime'), rowRefl = $('rowRefl');
 const playBtn = $('play'), playIcon = $('playIcon');
 const barTitle = $('barTitle'), barSub = $('barSub'), barInfo = $('barInfo');
 const PLAY_D = 'M7 4.5 L19.5 12 L7 19.5 Z';
@@ -1500,6 +1506,8 @@ function updateControls() {
   setEnabled(rowPhase, [phaseIn], g !== 'C');
   setEnabled(rowFx, [fxIn], g !== 'A');
   setEnabled(rowFy, [fyIn], g !== 'A');
+  setEnabled(rowRefl, [reflIn], g === 'C');
+  reflIn.value = state.refl; reflOut.textContent = fmtSigned(state.refl) + ' mm';
   setEnabled(rowTime, [timeIn, playBtn], state.view === 'wave');
 
   phaseIn.value = state.phaseDeg;
@@ -1546,7 +1554,7 @@ function currentUrl() {
   const q = u.searchParams;
   q.set('geo', state.geo); q.set('view', state.view);
   q.set('phase', state.phaseDeg); q.set('fx', state.fx); q.set('fy', state.fy);
-  q.set('t', state.t.toFixed(1));
+  q.set('t', state.t.toFixed(1)); q.set('refl', state.refl);
   if (state.playing || state.autoplay) q.set('play', '1');
   q.set('fade0', WAVELET_FADE_START); q.set('fade1', WAVELET_FADE_END); q.set('alpha', WAVELET_ALPHA);
   q.set('efade0', ENV_FADE_START); q.set('efade1', ENV_FADE_END);
@@ -1572,6 +1580,7 @@ loadSaved();
   const fx = num('fx', -10, 10); if (fx !== null) state.fx = fx;
   const fy = num('fy', -10, 10); if (fy !== null) state.fy = fy;
   const t = num('t', 0, 600); if (t !== null) state.t = t;
+  const rf = num('refl', 0, 45); if (rf !== null) state.refl = rf;
   const f0 = num('fade0', 0, 6); if (f0 !== null) WAVELET_FADE_START = f0;
   const f1 = num('fade1', 0.25, 8); if (f1 !== null) WAVELET_FADE_END = f1;
   const al = num('alpha', 0.1, 1); if (al !== null) WAVELET_ALPHA = al;
@@ -1662,7 +1671,7 @@ $('resetAll').addEventListener('click', () => {
   WAVELET_ALPHA = 0.6; WAVELET_FADE_START = 1; WAVELET_FADE_END = 3;
   ENV_FADE_START = 12; ENV_FADE_END = 16;
   C_PLATE_RATIO = 2.5 / 0.343; setSoundSpeed(343); T_END = 600;
-  state.geo = 'A'; state.view = 'wave'; state.phaseDeg = 0; state.fx = 0; state.fy = 0; state.t = 150;
+  state.geo = 'A'; state.view = 'wave'; state.phaseDeg = 0; state.fx = 0; state.fy = 0; state.refl = 4.3; state.t = 150;
   setPlaying(false);
   try { localStorage.removeItem(STORE_KEY); } catch (e) { /* ignore */ }
   syncFade(); syncPhys(); onParamsChanged();
@@ -1737,6 +1746,7 @@ btnField.addEventListener('click', () => setView('field'));
 phaseIn.addEventListener('input', () => { state.phaseDeg = Number(phaseIn.value); onParamsChanged(); });
 fxIn.addEventListener('input', () => { state.fx = Number(fxIn.value); onParamsChanged(); });
 fyIn.addEventListener('input', () => { state.fy = Number(fyIn.value); onParamsChanged(); });
+reflIn.addEventListener('input', () => { state.refl = Number(reflIn.value); onParamsChanged(); });
 timeIn.addEventListener('input', () => {
   state.t = Number(timeIn.value);
   timeOut.textContent = state.t.toFixed(1) + ' µs';
