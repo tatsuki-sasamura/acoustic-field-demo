@@ -382,6 +382,11 @@
         <input type="range" id="cs" min="100" max="1600" step="10" value="343" aria-label="音速 (m/s)、波長は一定">
         <output id="csVal">343 m/s</output>
       </div>
+      <div class="ctl" id="rowCr">
+        <span class="lab">板の音速比</span>
+        <input type="range" id="cr" min="1.2" max="15" step="0.1" value="7.3" aria-label="ホログラム板の音速 ÷ 空気の音速">
+        <output id="crVal">7.3</output>
+      </div>
       <div class="ctl" id="rowTmax">
         <span class="lab">時刻の上限</span>
         <input type="range" id="tmax" min="100" max="3000" step="50" value="600" aria-label="再生時間の上限 (µs)">
@@ -429,7 +434,7 @@ const PITCH      = 2 * APERTURE / (N_LINE - 1);    // element pitch of the flat 
 
 // Hologram plate (C). Sound is faster in the plate than in air, so a plate of
 // thickness h lets the wave arrive earlier by h (1/c_air - 1/c_plate).
-const C_PLATE_RATIO = 2.5 / 0.343;                     // plate / air sound-speed ratio (2500 / 343): the plate shape is then independent of the air speed
+let   C_PLATE_RATIO = 2.5 / 0.343;                     // plate / air sound-speed ratio (2500 / 343): the plate shape is then independent of the air speed
 let   C_PLATE      = 2.5;                              // 2500 m/s (typical 3D-printing resin)
 let   PLATE_PER_US = 1 / (1 / C_AIR - 1 / C_PLATE);    // plate thickness per µs of advance [mm/µs]
 const PLATE_BASE   = 2;                                // thinnest part of the plate [mm]
@@ -585,7 +590,7 @@ function buildModel() {
       for (let i = 0; i <= 200; i++) T0 = Math.min(T0, arrival(xa + (xb - xa) * i / 200, PLATE_BASE));
       const thick = (x) => {
         if (arrival(x, PLATE_BASE) <= T0 + 1e-9) return PLATE_BASE;
-        let lo = PLATE_BASE, hi = PLATE_BASE + 80;       // arrival() decreases with h (C_PLATE > C_AIR)
+        let lo = PLATE_BASE, hi = PLATE_BASE + 400;      // arrival() decreases with h (C_PLATE > C_AIR)
         for (let it = 0; it < 40; it++) {
           const mid = 0.5 * (lo + hi);
           if (arrival(x, mid) > T0) lo = mid; else hi = mid;
@@ -604,7 +609,7 @@ function buildModel() {
       m.reflectorY = yr;
       m.plate = { x0: xa, x1: xb, h: thick };
       m.bars = { xs, vals: xs.map(thick), curve: thick, x0: xa, x1: xb, unit: 'mm' };
-      m.key = 'C|' + F.x + '|' + F.y + '|' + C_AIR;
+      m.key = 'C|' + F.x + '|' + F.y + '|' + C_AIR + '|' + C_PLATE_RATIO;
     }
   }
 
@@ -1465,6 +1470,7 @@ function loadSaved() {
     if (Number.isFinite(v.alpha)) WAVELET_ALPHA = v.alpha;
     if (Number.isFinite(v.efade0)) ENV_FADE_START = v.efade0;
     if (Number.isFinite(v.efade1)) ENV_FADE_END = v.efade1;
+    if (Number.isFinite(v.cr)) C_PLATE_RATIO = v.cr;
     if (Number.isFinite(v.c)) setSoundSpeed(v.c);
     if (Number.isFinite(v.tmax)) T_END = v.tmax;
   } catch (e) { /* storage unavailable: defaults stay */ }
@@ -1473,7 +1479,7 @@ function saveSettings() {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify({
       fade0: WAVELET_FADE_START, fade1: WAVELET_FADE_END, alpha: WAVELET_ALPHA, efade0: ENV_FADE_START, efade1: ENV_FADE_END,
-      c: Math.round(C_AIR * 1000), tmax: T_END }));
+      c: Math.round(C_AIR * 1000), cr: C_PLATE_RATIO, tmax: T_END }));
   } catch (e) { /* ignore */ }
 }
 function currentUrl() {
@@ -1486,7 +1492,7 @@ function currentUrl() {
   if (state.playing || state.autoplay) q.set('play', '1');
   q.set('fade0', WAVELET_FADE_START); q.set('fade1', WAVELET_FADE_END); q.set('alpha', WAVELET_ALPHA);
   q.set('efade0', ENV_FADE_START); q.set('efade1', ENV_FADE_END);
-  q.set('c', Math.round(C_AIR * 1000)); q.set('tmax', T_END);
+  q.set('c', Math.round(C_AIR * 1000)); q.set('cr', C_PLATE_RATIO); q.set('tmax', T_END);
   return u.toString();
 }
 function syncUrlBox() {
@@ -1514,7 +1520,9 @@ loadSaved();
   const e0 = num('efade0', 0, 20); if (e0 !== null) ENV_FADE_START = e0;
   const e1 = num('efade1', 0.5, 24); if (e1 !== null) ENV_FADE_END = e1;
   if (ENV_FADE_END <= ENV_FADE_START) ENV_FADE_END = ENV_FADE_START + 0.5;
+  const cr = num('cr', 1.2, 15); if (cr !== null) C_PLATE_RATIO = cr;
   const cs = num('c', 100, 1600); if (cs !== null) setSoundSpeed(cs);
+  C_PLATE = C_AIR * C_PLATE_RATIO; PLATE_PER_US = 1 / (1 / C_AIR - 1 / C_PLATE);
   const tm = num('tmax', 100, 3000); if (tm !== null) T_END = tm;
   if (WAVELET_FADE_END <= WAVELET_FADE_START) WAVELET_FADE_END = WAVELET_FADE_START + 0.25;
   state.autoplay = q.get('play') === '1';
@@ -1525,6 +1533,7 @@ const gearBtn = $('gear'), fadePop = $('fadePop');
 const fade0In = $('fade0'), fade1In = $('fade1'), fadeAIn = $('fadeA');
 const fade0Out = $('fade0Val'), fade1Out = $('fade1Val'), fadeAOut = $('fadeAVal');
 const csIn = $('cs'), csOut = $('csVal'), tmaxIn = $('tmax'), tmaxOut = $('tmaxVal');
+const crIn = $('cr'), crOut = $('crVal');
 const efade0In = $('efade0'), efade1In = $('efade1'), efade0Out = $('efade0Val'), efade1Out = $('efade1Val');
 
 function setSoundSpeed(ms) {
@@ -1539,6 +1548,7 @@ function setSoundSpeed(ms) {
 function syncPhys() {
   csIn.value = Math.round(C_AIR * 1000); csOut.textContent = Math.round(C_AIR * 1000) + ' m/s';
   tmaxIn.value = T_END; tmaxOut.textContent = T_END + ' µs';
+  crIn.value = C_PLATE_RATIO; crOut.textContent = C_PLATE_RATIO.toFixed(1);
   timeIn.max = T_END;
   $('barInfo').textContent = Math.round(FREQ * 1000) + ' kHz，λ = ' + LAMBDA.toFixed(1) + ' mm';
 }
@@ -1576,6 +1586,12 @@ efade1In.addEventListener('input', () => {
   ENV_FADE_END = Number(efade1In.value);
   if (ENV_FADE_START >= ENV_FADE_END) ENV_FADE_START = Math.max(0, ENV_FADE_END - 0.5);
   syncFade(); saveSettings(); requestRender();
+});
+crIn.addEventListener('input', () => {
+  C_PLATE_RATIO = Number(crIn.value);
+  C_PLATE = C_AIR * C_PLATE_RATIO;
+  PLATE_PER_US = 1 / (1 / C_AIR - 1 / C_PLATE);
+  syncPhys(); saveSettings(); onParamsChanged();
 });
 csIn.addEventListener('input', () => { setSoundSpeed(Number(csIn.value)); syncPhys(); saveSettings(); onParamsChanged(); });
 tmaxIn.addEventListener('input', () => {
