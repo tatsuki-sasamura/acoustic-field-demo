@@ -1,0 +1,1313 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>集束音場と定在波</title>
+<style>
+  :root {
+    --bg: #eef1f5;
+    --card: #ffffff;
+    --ink: #1d2733;
+    --muted: #5a6573;
+    --rule: #d3dae2;
+    --accent: #1b5fa8;
+    --focus: #f59f00;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "BIZ UDPGothic", "Meiryo", "Yu Gothic UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+    font-size: 18px;
+    line-height: 1.25;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* The whole UI is laid out on a fixed 960 x 540 stage (16:9) that JavaScript
+     scales uniformly to fit the viewport, so nothing reflows when the window
+     (or the Web Viewer frame) changes size. */
+  #stage {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 960px;
+    height: 540px;
+    transform-origin: 0 0;
+    display: grid;
+    grid-template-columns: 470px 1fr;
+    grid-template-rows: 48px 1fr;
+    gap: 8px;
+    padding: 8px;
+  }
+
+  /* ---------- top bar: geometry radios + view toggle ---------- */
+  #topbar {
+    grid-column: 1 / 3;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .seg {
+    display: flex;
+    border: 2px solid var(--accent);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--card);
+  }
+  .seg > * + * { border-left: 2px solid var(--accent); }
+  .seg label { position: relative; display: block; margin: 0; }
+  .seg input {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    opacity: 0;
+  }
+  .seg .opt {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 44px;
+    padding: 0 12px;
+    font: inherit;
+    font-size: 18px;
+    color: var(--accent);
+    background: var(--card);
+    border: 0;
+    border-radius: 0;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .seg .dot {
+    position: relative;
+    flex: none;
+    width: 15px;
+    height: 15px;
+    border: 2px solid currentColor;
+    border-radius: 50%;
+  }
+  .seg input:checked + .opt,
+  .seg button[aria-pressed="true"] {
+    background: var(--accent);
+    color: #ffffff;
+  }
+  .seg input:checked + .opt .dot::after {
+    content: "";
+    position: absolute;
+    inset: 2px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .seg input:focus-visible + .opt,
+  .seg button:focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: -4px;
+  }
+
+  /* ---------- main view (device / field) ---------- */
+  #viewBox {
+    grid-row: 2;
+    grid-column: 1;
+    position: relative;
+    background: var(--card);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  }
+  #viewBox canvas,
+  #barBox canvas {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* ---------- right panel: sliders + bar graph ---------- */
+  #panel {
+    grid-row: 2;
+    grid-column: 2;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 12px 6px;
+    background: var(--card);
+    border-radius: 10px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  }
+  .ctl {
+    display: grid;
+    grid-template-columns: 128px 1fr 100px;
+    align-items: center;
+    column-gap: 10px;
+    height: 44px;
+    flex: none;
+  }
+  .ctl .lab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+  }
+  .ctl output {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .ctl.off { opacity: 0.38; }
+
+  #play {
+    width: 40px;
+    height: 34px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  #play:disabled { cursor: default; }
+  #play:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 32px;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+  input[type="range"]:disabled { cursor: default; }
+  input[type="range"]:focus { outline: none; }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 8px;
+    border-radius: 4px;
+    background: #c3d1e0;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 24px;
+    height: 24px;
+    margin-top: -8px;
+    border: 3px solid #ffffff;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--focus); }
+  input[type="range"]::-moz-range-track {
+    height: 8px;
+    border-radius: 4px;
+    background: #c3d1e0;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border: 3px solid #ffffff;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+
+  #barHead {
+    flex: none;
+    margin-top: 4px;
+    padding-top: 6px;
+    border-top: 1px solid var(--rule);
+  }
+  #barTitleRow {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  #barTitle { font-size: 22px; font-weight: bold; }
+  #barInfo { color: var(--muted); white-space: nowrap; }
+  #barSub { color: var(--muted); white-space: nowrap; }
+  #barBox {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    margin-top: 4px;
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="topbar">
+    <div class="seg" role="radiogroup" aria-label="遅れの作り方">
+      <label><input type="radio" name="geo" value="A" checked><span class="opt"><span class="dot"></span>球面（形）</span></label>
+      <label><input type="radio" name="geo" value="B"><span class="opt"><span class="dot"></span>平面アレイ（信号）</span></label>
+      <label><input type="radio" name="geo" value="C"><span class="opt"><span class="dot"></span>ホログラム（板の厚み）</span></label>
+    </div>
+    <div class="seg" role="group" aria-label="表示">
+      <button type="button" class="opt" id="btnWave" aria-pressed="true">素元波と包絡面</button>
+      <button type="button" class="opt" id="btnField" aria-pressed="false">音圧分布</button>
+    </div>
+  </div>
+
+  <div id="viewBox"><canvas id="view" aria-label="装置と音場の図"></canvas></div>
+
+  <div id="panel">
+    <div class="ctl" id="rowPhase">
+      <span class="lab">上下の位相差</span>
+      <input type="range" id="phase" min="0" max="360" step="5" value="0" aria-label="上下の位相差">
+      <output id="phaseVal">0°</output>
+    </div>
+    <div class="ctl" id="rowFx">
+      <span class="lab">焦点 X</span>
+      <input type="range" id="fx" min="-10" max="10" step="0.5" value="0" aria-label="焦点 X">
+      <output id="fxVal">0.0 mm</output>
+    </div>
+    <div class="ctl" id="rowFy">
+      <span class="lab">焦点 Y</span>
+      <input type="range" id="fy" min="-10" max="10" step="0.5" value="0" aria-label="焦点 Y">
+      <output id="fyVal">0.0 mm</output>
+    </div>
+    <div class="ctl" id="rowTime">
+      <span class="lab">
+        <button type="button" id="play" aria-label="再生">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path id="playIcon" d="M7 4.5 L19.5 12 L7 19.5 Z" fill="currentColor"></path></svg>
+        </button>時刻
+      </span>
+      <input type="range" id="time" min="0" max="600" step="0.5" value="150" aria-label="時刻">
+      <output id="timeVal">150.0 µs</output>
+    </div>
+
+    <div id="barHead">
+      <div id="barTitleRow"><span id="barTitle">形で遅れを作る</span><span id="barInfo"></span></div>
+      <div id="barSub"></div>
+    </div>
+    <div id="barBox"><canvas id="bars" aria-label="各素子の遅れ"></canvas></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+/* =====================================================================
+   1. Physical model (lengths in mm, times in µs)
+   ===================================================================== */
+const C_AIR  = 0.343;                  // speed of sound in air: 343 m/s = 0.343 mm/µs
+const FREQ   = 0.040;                  // drive frequency: 40 kHz = 0.040 cycles per µs
+const PERIOD = 1 / FREQ;               // T = 25 µs
+const LAMBDA = C_AIR / FREQ;           // λ = 8.575 mm
+const K_WAVE = 2 * Math.PI / LAMBDA;   // wavenumber k [rad/mm]
+const OMEGA  = 2 * Math.PI * FREQ;     // angular frequency ω [rad/µs]
+
+// Device geometry. All three devices share the same aperture: half-width
+// APERTURE, seen from the centre under the half-angle HALF_ANGLE. The flat
+// lines of B and C lie in the plane of the cap rims (y = ±LINE_Y), so the
+// device occupies the same place in every mode.
+const R_FOCAL    = 55;                             // cap radius (vertex-to-vertex separation 110 mm)
+const HALF_ANGLE = 35 * Math.PI / 180;             // aperture half-angle
+const APERTURE   = R_FOCAL * Math.sin(HALF_ANGLE); // half-width of every device: 31.5 mm
+const LINE_Y     = R_FOCAL * Math.cos(HALF_ANGLE); // height of the cap rims and of the flat lines: 45.1 mm
+const N_CAP      = 7;                              // sources per cap (A)
+const N_LINE     = 9;                              // sources per flat line (B, C)
+const PITCH      = 2 * APERTURE / (N_LINE - 1);    // element pitch of the flat lines: 7.9 mm
+
+// Hologram plate (C). Sound is faster in the plate than in air, so a plate of
+// thickness h lets the wave arrive earlier by h (1/c_air - 1/c_plate).
+const C_PLATE      = 2.5;                              // 2500 m/s (typical 3D-printing resin)
+const PLATE_PER_US = 1 / (1 / C_AIR - 1 / C_PLATE);    // plate thickness per µs of advance [mm/µs]
+const PLATE_BASE   = 2;                                // thinnest part of the plate [mm]
+
+const BACKING = 5;   // drawn thickness of the transducer backing and of the reflector [mm]
+const R_MIN   = 1;   // r is limited to >= 1 mm in the field sum (avoids 1/sqrt(0) at a source)
+
+// View and animation
+const Y_HALF    = 64;    // the plot shows y in [-64, 64] mm; the x range follows from the aspect ratio
+const T_END     = 600;   // length of the time axis [µs]
+const PLAY_RATE = 40;    // playback speed [µs of simulated time per second of real time]
+const LEGEND_H  = 40;    // height of the legend strip under the plot [px of the 960x540 stage]
+
+const FONT = '"BIZ UDPGothic", "Meiryo", "Yu Gothic UI", "Hiragino Sans", "Noto Sans JP", sans-serif';
+const COL = {
+  low: '#e8590c',        // lower half (sources and their waves)
+  up: '#7048e8',         // upper half, or the reflected wave in C
+  ink: '#1d2733',
+  muted: '#5a6573',
+  axis: '#7d8893',
+  frame: '#b9c2cc',
+  body: '#8d99a6',
+  bodyEdge: '#4f5b66',
+  plate: '#f7c873',
+  plateEdge: '#c26a00',
+  plateBar: '#e8a33a',
+  reflector: '#5c6773',
+  reflectorEdge: '#39424c',
+  shade: '#e3e7ec',      // region behind the reflector (no field computed there)
+  node: '#e03131',
+};
+
+const CAPTIONS = {
+  A: ['形で遅れを作る', '駆動は全素子同時、凹面の形が遅れを生む'],
+  B: ['信号で遅れを作る', '平面に並べ、駆動の時刻をずらす'],
+  C: ['厚みで遅れを作る', '板は空気より音速が速く、厚い所ほど早く抜ける'],
+};
+
+/* =====================================================================
+   2. State
+   ===================================================================== */
+const state = {
+  geo: 'A',        // 'A' sphere caps, 'B' flat arrays with drive delays, 'C' plate + reflector
+  view: 'wave',    // 'wave' (wavelets and envelope) or 'field' (pressure amplitude)
+  phaseDeg: 0,     // phase difference upper vs lower half [deg] (A, B)
+  fx: 0,           // focus position [mm] (B, C)
+  fy: 0,
+  t: 150,          // time [µs] in the wavelet view
+  playing: false,
+};
+
+/* =====================================================================
+   3. Model: sources, delays, bars
+   Each source is {x, y, e}: position [mm] and emission delay e [µs].
+   A source with delay e radiates p = cos(k r - ω t + ω e) / sqrt(r)
+   (2-D monopole), i.e. phase φ = ω e in A·cos(k r - ω t + φ)/sqrt(r).
+   Sources are grouped into two "halves" (lower + upper, or lower + image).
+   ===================================================================== */
+function makeHalf(kind, src, F, clipYMin, clipYMax) {
+  const d = src.map(s => Math.hypot(s.x - F.x, s.y - F.y));
+  // Time at which emission 0 of this half arrives at its focus. By
+  // construction e_i + d_i/c is the same for every source of the half.
+  let tArr = 0;
+  src.forEach((s, i) => { tArr += s.e + d[i] / C_AIR; });
+  tArr /= src.length;
+  return {
+    kind,                 // 'low', 'up' or 'img'
+    src,
+    F,                    // focus of this half (the mirrored focus for the image half)
+    d,                    // distance of every source to F [mm]
+    tArr,
+    eMin: Math.min(...src.map(s => s.e)),
+    clipYMin,             // wavelets are drawn only between these heights [mm]
+    clipYMax,
+  };
+}
+
+function linePositions() {
+  const xs = [];
+  for (let j = 0; j < N_LINE; j++) xs.push(-APERTURE + 2 * APERTURE * j / (N_LINE - 1));
+  return xs;
+}
+
+function buildModel() {
+  const R = R_FOCAL;
+  const dT = state.phaseDeg / 360 * PERIOD;   // extra delay of the upper half [µs]
+  const m = { geo: state.geo, F: null, halves: [], bars: null, plate: null, reflectorY: null, key: '' };
+
+  if (state.geo === 'A') {
+    // (1) Shape: two caps of radius R centred on the focus; every source is
+    // driven at the same time, the shape itself makes the arrival times equal.
+    const F = { x: 0, y: 0 };
+    const low = [], up = [];
+    for (let j = 0; j < N_CAP; j++) {
+      const th = -HALF_ANGLE + 2 * HALF_ANGLE * j / (N_CAP - 1);
+      const x = R * Math.sin(th), y = R * Math.cos(th);
+      low.push({ x, y: -y, e: 0 });
+      up.push({ x, y: y, e: dT });
+    }
+    m.F = F;
+    m.halves.push(makeHalf('low', low, F, -R, R));
+    m.halves.push(makeHalf('up', up, F, -R, R));
+    // Bars: the delay that the cap shape makes. An undelayed element on the
+    // rim plane y = -LINE_Y at the same x is at distance d(x) from the focus;
+    // the cap element sits farther back, at distance R, so its wave arrives
+    // later by (R - d(x))/c. This is exactly the drive delay B uses there.
+    const curve = (x) => (R - Math.hypot(x, LINE_Y)) / C_AIR;
+    m.bars = { xs: low.map(s => s.x), vals: low.map(s => curve(s.x)), curve, x0: -APERTURE, x1: APERTURE, unit: 'us' };
+    m.key = 'A|' + state.phaseDeg;
+  } else {
+    const F = { x: state.fx, y: state.fy };
+    m.F = F;
+    const Y = LINE_Y;
+    const xs = linePositions();
+    const dLow = (x) => Math.hypot(x - F.x, -Y - F.y);
+    const dUp = (x) => Math.hypot(x - F.x, Y - F.y);
+    const DLow = Math.max(...xs.map(dLow));
+    // delay_i = (d_max - d_i) / c : the waves of the lower line reach F together
+    const tauLow = (x) => (DLow - dLow(x)) / C_AIR;
+    const low = xs.map(x => ({ x, y: -Y, e: tauLow(x) }));
+
+    if (state.geo === 'B') {
+      // (2) Signal: two flat lines; the upper line uses the same rule and is
+      // aligned so that both halves arrive at F together, then delayed by dT.
+      const up = xs.map(x => ({ x, y: Y, e: (DLow - dUp(x)) / C_AIR + dT }));
+      m.halves.push(makeHalf('low', low, F, -Y, Y));
+      m.halves.push(makeHalf('up', up, F, -Y, Y));
+      m.bars = { xs, vals: xs.map(tauLow), curve: tauLow, x0: -APERTURE, x1: APERTURE, unit: 'us' };
+      m.key = 'B|' + state.phaseDeg + '|' + F.x + '|' + F.y;
+    } else {
+      // (3) Plate: one flat line driven uniformly; the plate turns the uniform
+      // drive into the same per-element delays as in B (modelled as such).
+      // A rigid flat reflector at y = +LINE_Y closes the standing wave; it is
+      // modelled by image sources mirrored at the reflector (same phase).
+      const yr = Y;
+      const img = low.map(s => ({ x: s.x, y: 2 * yr - s.y, e: s.e }));
+      const Fimg = { x: F.x, y: 2 * yr - F.y };
+      m.halves.push(makeHalf('low', low, F, -Y, yr));
+      m.halves.push(makeHalf('img', img, Fimg, -Y, yr));
+      m.reflectorY = yr;
+      // Thickness profile: thicker where the delay must be shorter.
+      // h(x) = h0 + (tau_ref - tau(x)) / (1/c_air - 1/c_plate)
+      const xa = -APERTURE - PITCH / 2, xb = APERTURE + PITCH / 2;
+      const tauRef = tauLow(Math.min(xb, Math.max(xa, F.x)));   // largest delay on the plate
+      const thick = (x) => PLATE_BASE + PLATE_PER_US * (tauRef - tauLow(x));
+      m.plate = { x0: xa, x1: xb, h: thick };
+      m.bars = { xs, vals: xs.map(thick), curve: thick, x0: xa, x1: xb, unit: 'mm' };
+      m.key = 'C|' + F.x + '|' + F.y;
+    }
+  }
+
+  // Shift all emission times so that the earliest emission happens at t = 0.
+  let eMin = Infinity;
+  for (const h of m.halves) for (const s of h.src) eMin = Math.min(eMin, s.e);
+  for (const h of m.halves) {
+    for (const s of h.src) s.e -= eMin;
+    h.tArr -= eMin;
+    h.eMin -= eMin;
+  }
+  return m;
+}
+
+/* =====================================================================
+   4. Pressure field
+   p(x, y, t) = sum_i cos(k r_i - ω t + φ_i) / sqrt(r_i)
+              = Re{ P(x, y) e^{-iωt} },  P = sum_i e^{i(k r_i + φ_i)} / sqrt(r_i)
+   The envelope of p over one period (its maximum over t) is exactly |P|,
+   so the amplitude map is computed from the phasor sum (no time stepping).
+   ===================================================================== */
+function fieldSources(m) {
+  const all = [];
+  for (const h of m.halves) for (const s of h.src) all.push(s);
+  const n = all.length;
+  const fs = { n, x: new Float64Array(n), y: new Float64Array(n), ph: new Float64Array(n) };
+  all.forEach((s, i) => { fs.x[i] = s.x; fs.y[i] = s.y; fs.ph[i] = OMEGA * s.e; });
+  return fs;
+}
+
+function amplitudeAt(fs, x, y) {
+  let re = 0, im = 0;
+  for (let s = 0; s < fs.n; s++) {
+    const dx = x - fs.x[s], dy = y - fs.y[s];
+    let r = Math.sqrt(dx * dx + dy * dy);
+    if (r < R_MIN) r = R_MIN;
+    const a = 1 / Math.sqrt(r), p = K_WAVE * r + fs.ph[s];
+    re += a * Math.cos(p);
+    im += a * Math.sin(p);
+  }
+  return Math.sqrt(re * re + im * im);
+}
+
+// Pressure nodes along the vertical line through the focus: local minima of
+// |P| that are deep compared with the antinodes on both sides (searched
+// within λ/2 on each side), where those antinodes are strong compared with
+// the strongest point on the line (i.e. where the standing wave is strong).
+const NODE_DEPTH = 0.35;   // minimum <= 35 % of the weaker neighbouring antinode
+const NODE_SIGNIF = 0.5;   // both neighbouring antinodes >= 50 % of the maximum on the line
+function findNodes(m, fs) {
+  const x = m.F.x;
+  const y0 = -LINE_Y + 8;
+  const y1 = m.reflectorY !== null ? m.reflectorY - 0.3 : LINE_Y - 8;
+  const step = 0.05;
+  const n = Math.floor((y1 - y0) / step) + 1;
+  const a = new Float64Array(n);
+  let peak = 0;
+  for (let i = 0; i < n; i++) {
+    a[i] = amplitudeAt(fs, x, y0 + i * step);
+    if (a[i] > peak) peak = a[i];
+  }
+  const win = Math.round(LAMBDA / 2 / step);
+  const nodes = [];
+  for (let i = 1; i < n - 1; i++) {
+    if (!(a[i] < a[i - 1] && a[i] <= a[i + 1])) continue;
+    let left = 0, right = 0;
+    for (let j = Math.max(0, i - win); j < i; j++) if (a[j] > left) left = a[j];
+    for (let j = i + 1; j <= Math.min(n - 1, i + win); j++) if (a[j] > right) right = a[j];
+    const side = Math.min(left, right);
+    if (side < NODE_SIGNIF * peak || a[i] > NODE_DEPTH * side) continue;
+    nodes.push(y0 + i * step);
+  }
+  return nodes;
+}
+
+// Colour map: white = 0, light blue, ..., dark navy = high amplitude.
+// The amplitude a (relative to the focal amplitude) is shown as colour
+// a^CMAP_GAMMA, which keeps zero white but lets the focal region stand out
+// from the weaker interference pattern around it.
+const CMAP_GAMMA = 1.5;
+const CMAP_STOPS = [
+  [0.00, 255, 255, 255],
+  [0.12, 226, 238, 249],
+  [0.35, 150, 192, 226],
+  [0.65, 49, 120, 186],
+  [1.00, 8, 42, 96],
+];
+const CMAP = (() => {
+  const lut = new Uint8ClampedArray(256 * 3);
+  for (let i = 0; i < 256; i++) {
+    const t = i / 255;
+    let k = 0;
+    while (k < CMAP_STOPS.length - 2 && t > CMAP_STOPS[k + 1][0]) k++;
+    const s0 = CMAP_STOPS[k], s1 = CMAP_STOPS[k + 1];
+    const u = (t - s0[0]) / (s1[0] - s0[0]);
+    for (let c = 0; c < 3; c++) lut[3 * i + c] = s0[c + 1] + u * (s1[c + 1] - s0[c + 1]);
+  }
+  return lut;
+})();
+
+// Index into CMAP (0..765, step 3) for a relative amplitude u.
+function cmapIndex(u) {
+  const v = Math.min(1, Math.max(0, u));
+  return 3 * Math.round(255 * Math.pow(v, CMAP_GAMMA));
+}
+
+const fieldCache = { key: '', canvas: null, nodes: [] };
+
+function gridDims() {
+  return { nx: Math.max(20, Math.round(PLOT.w / 2)), ny: Math.max(20, Math.round(PLOT.h / 2)) };
+}
+
+// Recompute the amplitude map only when a parameter has changed; the result
+// is kept as an ImageData in a small offscreen canvas.
+function ensureField(m) {
+  const { nx, ny } = gridDims();
+  const key = m.key + '|' + nx + 'x' + ny + '|' + X_HALF.toFixed(3);
+  if (fieldCache.key === key && fieldCache.canvas) return;
+
+  const fs = fieldSources(m);
+  const dx = 2 * X_HALF / nx, dy = 2 * Y_HALF / ny;
+  const amp = new Float32Array(nx * ny);
+  const masked = new Uint8Array(nx * ny);
+  const keepOut = 1.5 * LAMBDA;    // cells closer than this to a source do not set the colour scale
+  let ref = 0;
+  for (let j = 0; j < ny; j++) {
+    const y = Y_HALF - (j + 0.5) * dy;
+    for (let i = 0; i < nx; i++) {
+      const x = -X_HALF + (i + 0.5) * dx;
+      const idx = j * nx + i;
+      if (m.reflectorY !== null && y > m.reflectorY) { masked[idx] = 1; continue; }
+      let re = 0, im = 0, rNear = Infinity;
+      for (let s = 0; s < fs.n; s++) {
+        const ddx = x - fs.x[s], ddy = y - fs.y[s];
+        let r = Math.sqrt(ddx * ddx + ddy * ddy);
+        if (r < rNear) rNear = r;
+        if (r < R_MIN) r = R_MIN;
+        const a = 1 / Math.sqrt(r), p = K_WAVE * r + fs.ph[s];
+        re += a * Math.cos(p);
+        im += a * Math.sin(p);
+      }
+      const v = Math.sqrt(re * re + im * im);
+      amp[idx] = v;
+      if (rNear > keepOut && v > ref) ref = v;
+    }
+  }
+  if (!(ref > 0)) ref = 1;
+
+  if (!fieldCache.canvas) fieldCache.canvas = document.createElement('canvas');
+  const cv = fieldCache.canvas;
+  cv.width = nx;
+  cv.height = ny;
+  const fctx = cv.getContext('2d');
+  const img = fctx.createImageData(nx, ny);
+  const px = img.data;
+  const shade = [0xe3, 0xe7, 0xec];
+  for (let idx = 0; idx < nx * ny; idx++) {
+    const o = 4 * idx;
+    if (masked[idx]) {
+      px[o] = shade[0]; px[o + 1] = shade[1]; px[o + 2] = shade[2];
+    } else {
+      const c = cmapIndex(amp[idx] / ref);
+      px[o] = CMAP[c]; px[o + 1] = CMAP[c + 1]; px[o + 2] = CMAP[c + 2];
+    }
+    px[o + 3] = 255;
+  }
+  fctx.putImageData(img, 0, 0);
+  fieldCache.nodes = findNodes(m, fs);
+  fieldCache.key = key;
+}
+
+/* =====================================================================
+   5. Layout and coordinates
+   ===================================================================== */
+const $ = (id) => document.getElementById(id);
+const stage = $('stage');
+const viewCanvas = $('view');
+const barCanvas = $('bars');
+const vctx = viewCanvas.getContext('2d');
+const bctx = barCanvas.getContext('2d');
+
+let stageScale = 1;
+let VIEW_W = 470, VIEW_H = 468;
+let PLOT = { x: 0, y: 0, w: 470, h: 428 };
+let PX_PER_MM = 1;
+let X_HALF = 70;
+
+// World (mm, y up, origin at the centre) to stage pixels (y down).
+const sx = (x) => PLOT.x + PLOT.w / 2 + x * PX_PER_MM;
+const sy = (y) => PLOT.y + PLOT.h / 2 - y * PX_PER_MM;
+
+function layoutView() {
+  VIEW_W = viewCanvas.clientWidth || 470;
+  VIEW_H = viewCanvas.clientHeight || 468;
+  PLOT = { x: 0, y: 0, w: VIEW_W, h: VIEW_H - LEGEND_H };
+  PX_PER_MM = PLOT.h / (2 * Y_HALF);
+  X_HALF = PLOT.w / 2 / PX_PER_MM;
+}
+
+// Backing store = displayed size x stage scale x devicePixelRatio, so the
+// drawing stays sharp at any projector resolution.
+function sizeCanvas(cv) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth || 1, h = cv.clientHeight || 1;
+  cv.width = Math.max(1, Math.round(w * stageScale * dpr));
+  cv.height = Math.max(1, Math.round(h * stageScale * dpr));
+  cv._w = w;
+  cv._h = h;
+  cv._kx = cv.width / w;
+  cv._ky = cv.height / h;
+}
+
+function fitStage() {
+  const W = window.innerWidth || 960, H = window.innerHeight || 540;
+  stageScale = Math.min(W / 960, H / 540);
+  if (!isFinite(stageScale) || stageScale <= 0) stageScale = 1;
+  const ox = Math.max(0, (W - 960 * stageScale) / 2);
+  const oy = Math.max(0, (H - 540 * stageScale) / 2);
+  stage.style.transform = 'translate(' + ox + 'px, ' + oy + 'px) scale(' + stageScale + ')';
+  layoutView();
+  sizeCanvas(viewCanvas);
+  sizeCanvas(barCanvas);
+  requestRender();
+}
+
+function farthestCorner(x, y) {
+  const ax = Math.max(Math.abs(-X_HALF - x), Math.abs(X_HALF - x));
+  const ay = Math.max(Math.abs(-Y_HALF - y), Math.abs(Y_HALF - y));
+  return Math.hypot(ax, ay);
+}
+
+/* =====================================================================
+   6. Drawing helpers
+   ===================================================================== */
+function clipToPlot(ctx) {
+  ctx.beginPath();
+  ctx.rect(PLOT.x, PLOT.y, PLOT.w, PLOT.h);
+  ctx.clip();
+}
+
+function rectWorld(ctx, x0, y0, x1, y1) {
+  ctx.beginPath();
+  ctx.rect(sx(x0), sy(y1), (x1 - x0) * PX_PER_MM, (y1 - y0) * PX_PER_MM);
+}
+
+function fillStroke(ctx, fill, stroke, lw) {
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = lw;
+  ctx.stroke();
+}
+
+function dot(ctx, x, y, r, color) {
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, 2 * Math.PI);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+function haloText(ctx, txt, x, y, align, baseline, color) {
+  ctx.save();
+  ctx.font = '18px ' + FONT;
+  ctx.textAlign = align;
+  ctx.textBaseline = baseline;
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.92)';
+  ctx.strokeText(txt, x, y);
+  ctx.fillStyle = color;
+  ctx.fillText(txt, x, y);
+  ctx.restore();
+}
+
+function halfColor(h) { return h.kind === 'low' ? COL.low : COL.up; }
+
+/* ---------- frame (identical in all modes and both views) ---------- */
+function drawShade(ctx, m) {
+  if (m.reflectorY === null) return;
+  ctx.fillStyle = COL.shade;
+  ctx.fillRect(PLOT.x, PLOT.y, PLOT.w, sy(m.reflectorY) - PLOT.y);
+}
+
+function drawAxis(ctx) {
+  ctx.save();
+  ctx.strokeStyle = COL.axis;
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([12, 5, 3, 5]);
+  ctx.beginPath();
+  ctx.moveTo(sx(0), PLOT.y);
+  ctx.lineTo(sx(0), PLOT.y + PLOT.h);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawBorder(ctx) {
+  ctx.strokeStyle = COL.frame;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(PLOT.x + 0.5, PLOT.y + 0.5, PLOT.w - 1, PLOT.h - 1);
+}
+
+function drawLegend(ctx, m) {
+  const top = PLOT.y + PLOT.h, cy = top + LEGEND_H / 2;
+  ctx.save();
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, top, VIEW_W, LEGEND_H);
+  ctx.strokeStyle = COL.frame;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, top + 0.5);
+  ctx.lineTo(VIEW_W, top + 0.5);
+  ctx.stroke();
+
+  ctx.font = '18px ' + FONT;
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  let x = 12;
+  const label = (txt) => {
+    ctx.fillStyle = COL.ink;
+    ctx.fillText(txt, x, cy + 1);
+    x += ctx.measureText(txt).width;
+  };
+  const sample = (lw, alpha) => {
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = COL.low;
+    ctx.lineWidth = lw;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x + 2, cy);
+    ctx.lineTo(x + 24, cy);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    x += 32;
+  };
+
+  if (state.view === 'wave') {
+    sample(1.5, 0.8); label('素元波'); x += 16;
+    sample(4.5, 1); label('包絡面'); x += 18;
+    dot(ctx, x + 6, cy, 6, COL.low); x += 16; label('下'); x += 14;
+    dot(ctx, x + 6, cy, 6, COL.up); x += 16; label(m.geo === 'C' ? '反射' : '上');
+  } else {
+    label('振幅'); x += 8;
+    label('0'); x += 6;
+    const gw = 110, gh = 16;
+    const grad = ctx.createLinearGradient(x, 0, x + gw, 0);
+    for (let k = 0; k <= 20; k++) {
+      const c = cmapIndex(k / 20);
+      grad.addColorStop(k / 20, 'rgb(' + CMAP[c] + ',' + CMAP[c + 1] + ',' + CMAP[c + 2] + ')');
+    }
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, cy - gh / 2, gw, gh);
+    ctx.strokeStyle = COL.frame;
+    ctx.strokeRect(x + 0.5, cy - gh / 2 + 0.5, gw - 1, gh - 1);
+    x += gw + 6;
+    label('大'); x += 18;
+    ctx.strokeStyle = COL.node;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x + 6, cy, 4, 0, 2 * Math.PI);
+    ctx.stroke();
+    x += 18;
+    label('節');
+  }
+
+  // Scale bar (20 mm) at the right end of the strip.
+  const L = 20 * PX_PER_MM, xr = VIEW_W - 16, xl = xr - L, yb = cy + 10;
+  ctx.strokeStyle = COL.ink;
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = 'butt';
+  ctx.beginPath();
+  ctx.moveTo(xl, yb); ctx.lineTo(xr, yb);
+  ctx.moveTo(xl, yb - 5); ctx.lineTo(xl, yb + 5);
+  ctx.moveTo(xr, yb - 5); ctx.lineTo(xr, yb + 5);
+  ctx.stroke();
+  ctx.fillStyle = COL.ink;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText('20 mm', (xl + xr) / 2, yb - 8);
+  ctx.restore();
+}
+
+/* ---------- device (same drawing in both views) ---------- */
+function capBodyPath(ctx, sgn) {
+  // sgn = -1: lower cap, +1: upper cap. Shell between radius R and R + BACKING.
+  const a = HALF_ANGLE + 5 * Math.PI / 180, n = 48;
+  ctx.beginPath();
+  for (let i = 0; i <= n; i++) {
+    const th = -a + 2 * a * i / n;
+    ctx.lineTo(sx(R_FOCAL * Math.sin(th)), sy(sgn * R_FOCAL * Math.cos(th)));
+  }
+  for (let i = n; i >= 0; i--) {
+    const th = -a + 2 * a * i / n, r = R_FOCAL + BACKING;
+    ctx.lineTo(sx(r * Math.sin(th)), sy(sgn * r * Math.cos(th)));
+  }
+  ctx.closePath();
+}
+
+function platePath(ctx, plate) {
+  const n = 96;
+  ctx.beginPath();
+  ctx.moveTo(sx(plate.x0), sy(-LINE_Y));
+  for (let i = 0; i <= n; i++) {
+    const x = plate.x0 + (plate.x1 - plate.x0) * i / n;
+    ctx.lineTo(sx(x), sy(-LINE_Y + plate.h(x)));
+  }
+  ctx.lineTo(sx(plate.x1), sy(-LINE_Y));
+  ctx.closePath();
+}
+
+function drawDevice(ctx, m) {
+  ctx.save();
+  clipToPlot(ctx);
+  ctx.lineJoin = 'round';
+  if (m.geo === 'A') {
+    for (const sgn of [-1, 1]) {
+      capBodyPath(ctx, sgn);
+      fillStroke(ctx, COL.body, COL.bodyEdge, 1.5);
+    }
+  } else {
+    const xa = -APERTURE - PITCH / 2 - 2, xb = APERTURE + PITCH / 2 + 2;
+    rectWorld(ctx, xa, -LINE_Y - BACKING, xb, -LINE_Y);
+    fillStroke(ctx, COL.body, COL.bodyEdge, 1.5);
+    if (m.geo === 'B') {
+      rectWorld(ctx, xa, LINE_Y, xb, LINE_Y + BACKING);
+      fillStroke(ctx, COL.body, COL.bodyEdge, 1.5);
+    }
+  }
+  if (m.geo === 'C') {
+    rectWorld(ctx, -X_HALF - 2, m.reflectorY, X_HALF + 2, m.reflectorY + BACKING);
+    fillStroke(ctx, COL.reflector, COL.reflectorEdge, 1.5);
+    platePath(ctx, m.plate);
+    fillStroke(ctx, COL.plate, COL.plateEdge, 2);
+  }
+  // Real sources only (the image sources of C are not drawn).
+  for (const h of m.halves) {
+    if (h.kind === 'img') continue;
+    for (const s of h.src) dot(ctx, sx(s.x), sy(s.y), 5.5, halfColor(h));
+  }
+  if (m.geo === 'C') {
+    haloText(ctx, '反射板', sx(X_HALF) - 8, sy(m.reflectorY) + 6, 'right', 'top', COL.reflectorEdge);
+    const xr = m.plate.x1;
+    haloText(ctx, 'ホログラム板', sx(xr) + 6, sy(-LINE_Y + m.plate.h(xr) / 2), 'left', 'middle', COL.plateEdge);
+  }
+  ctx.restore();
+}
+
+function drawFocus(ctx, m) {
+  const x = sx(m.F.x), y = sy(m.F.y), a = 7;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x - a, y); ctx.lineTo(x + a, y);
+  ctx.moveTo(x, y - a); ctx.lineTo(x, y + a);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+  ctx.lineWidth = 5;
+  ctx.stroke();
+  ctx.strokeStyle = COL.ink;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+}
+
+/* ---------- view 1: Huygens wavelets and their envelope ---------- */
+// Arc of radius r around (cx, cy) through the touching points of consecutive
+// valid wavelets (angles in screen coordinates, in source order).
+function arcThrough(ctx, cx, cy, r, angles, valid) {
+  let prev = -1;
+  for (let i = 0; i < angles.length; i++) {
+    if (!valid[i]) { prev = -1; continue; }
+    if (prev < 0) {
+      ctx.moveTo(cx + r * Math.cos(angles[i]), cy + r * Math.sin(angles[i]));
+    } else {
+      let d = angles[i] - angles[prev];
+      d = Math.atan2(Math.sin(d), Math.cos(d));   // shortest way round
+      ctx.arc(cx, cy, r, angles[prev], angles[prev] + d, d < 0);
+    }
+    prev = i;
+  }
+}
+
+function clipHalf(ctx, h) {
+  const yTop = Math.max(PLOT.y, sy(h.clipYMax));
+  const yBot = Math.min(PLOT.y + PLOT.h, sy(h.clipYMin));
+  ctx.beginPath();
+  ctx.rect(PLOT.x, yTop, PLOT.w, Math.max(0, yBot - yTop));
+  ctx.clip();
+}
+
+function drawWavelets(ctx, h, t) {
+  // Every source re-emits a circular wavefront each period T, starting at its
+  // delay e; emission m has radius c (t - e - m T).
+  ctx.save();
+  clipHalf(ctx, h);
+  ctx.beginPath();
+  for (const s of h.src) {
+    const age = t - s.e;
+    if (age <= 0) continue;
+    const rFar = farthestCorner(s.x, s.y);
+    const mHi = Math.floor(age / PERIOD);
+    const mLo = Math.max(0, Math.ceil((age - rFar / C_AIR) / PERIOD));
+    const cx = sx(s.x), cy = sy(s.y);
+    for (let k = mLo; k <= mHi; k++) {
+      const r = C_AIR * (age - k * PERIOD) * PX_PER_MM;
+      if (r < 0.5) continue;
+      ctx.moveTo(cx + r, cy);
+      ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+    }
+  }
+  ctx.globalAlpha = 0.5;
+  ctx.strokeStyle = halfColor(h);
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawEnvelopes(ctx, h, t, pass) {
+  // For emission m, wavelet i has radius d_i + c s with s = t - m T - tArr.
+  // All of them touch the circle of radius |c s| around the focus F, so the
+  // envelope is that circle: on the source side while converging (s < 0),
+  // on the far side after passing the focus (s > 0).
+  // pass 'halo' draws a white outline under the line, pass 'line' the line.
+  const n = h.src.length;
+  const fx = sx(h.F.x), fy = sy(h.F.y);
+  const ang = h.src.map(s => Math.atan2(sy(s.y) - fy, sx(s.x) - fx));
+  const angOpp = ang.map(a => a + Math.PI);
+  const rFar = farthestCorner(h.F.x, h.F.y);
+  const kHi = Math.floor((t - h.eMin) / PERIOD);
+  const valid = new Array(n);
+  ctx.save();
+  clipHalf(ctx, h);
+  ctx.beginPath();
+  for (let k = 0; k <= kHi; k++) {
+    const rho = C_AIR * (t - k * PERIOD - h.tArr);   // signed envelope radius [mm]
+    const r = Math.abs(rho);
+    if (r * PX_PER_MM < 1) continue;
+    if (rho < 0) {
+      // converging: only wavelets that have already been emitted
+      for (let i = 0; i < n; i++) valid[i] = h.d[i] >= r - 1e-6;
+      arcThrough(ctx, fx, fy, r * PX_PER_MM, ang, valid);
+    } else {
+      if (r > rFar) continue;
+      for (let i = 0; i < n; i++) valid[i] = true;
+      arcThrough(ctx, fx, fy, r * PX_PER_MM, angOpp, valid);
+    }
+  }
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  if (pass === 'halo') {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.lineWidth = 8;
+  } else {
+    ctx.strokeStyle = halfColor(h);
+    ctx.lineWidth = 4;
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+/* ---------- view 2: pressure amplitude ---------- */
+function drawNodes(ctx, m, nodes) {
+  ctx.save();
+  clipToPlot(ctx);
+  ctx.strokeStyle = COL.node;
+  ctx.lineWidth = 2;
+  for (const y of nodes) {
+    ctx.beginPath();
+    ctx.arc(sx(m.F.x), sy(y), 4, 0, 2 * Math.PI);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/* ---------- main view ---------- */
+function renderView() {
+  const ctx = vctx, cv = viewCanvas, m = model;
+  ctx.setTransform(cv._kx || 1, 0, 0, cv._ky || 1, 0, 0);
+  ctx.clearRect(0, 0, VIEW_W, VIEW_H);
+  if (state.view === 'field') {
+    ensureField(m);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(fieldCache.canvas, PLOT.x, PLOT.y, PLOT.w, PLOT.h);
+  } else {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(PLOT.x, PLOT.y, PLOT.w, PLOT.h);
+    drawShade(ctx, m);
+  }
+  drawAxis(ctx);
+  if (state.view === 'wave') {
+    for (const h of m.halves) drawWavelets(ctx, h, state.t);
+    for (const h of m.halves) drawEnvelopes(ctx, h, state.t, 'halo');
+    for (const h of m.halves) drawEnvelopes(ctx, h, state.t, 'line');
+  }
+  drawDevice(ctx, m);
+  drawFocus(ctx, m);
+  if (state.view === 'field') drawNodes(ctx, m, fieldCache.nodes);
+  drawBorder(ctx);
+  drawLegend(ctx, m);
+}
+
+/* ---------- bar graph: delay (A, B) or plate thickness (C) per lower source ---------- */
+function fmtTick(v) { return v < 0 ? '−' + Math.abs(v) : String(v); }
+
+function renderBars() {
+  const ctx = bctx, cv = barCanvas, b = model.bars;
+  const W = cv._w || 1, H = cv._h || 1;
+  ctx.setTransform(cv._kx || 1, 0, 0, cv._ky || 1, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  const isMM = b.unit === 'mm';
+  const padL = 48, padR = 14, padT = 30, padB = 30;
+  const pw = W - padL - padR, ph = H - padT - padB;
+  if (pw < 20 || ph < 20) return;
+
+  // Continuous profile (the same function the bars sample).
+  const NS = 120, prof = [];
+  for (let i = 0; i <= NS; i++) {
+    const x = b.x0 + (b.x1 - b.x0) * i / NS;
+    prof.push([x, b.curve(x)]);
+  }
+  let vmax = 0;
+  for (const p of prof) vmax = Math.max(vmax, p[1]);
+  for (const v of b.vals) vmax = Math.max(vmax, v);
+  // Axis top: a multiple of the tick step, at least 30 µs or 15 mm.
+  const tick = isMM ? (vmax <= 20 ? 5 : 10) : (vmax <= 40 ? 10 : 20);
+  const top = Math.max(isMM ? 15 : 30, Math.ceil(vmax / tick - 1e-6) * tick);
+  const X0 = -40, X1 = 40;
+  const bx = (x) => padL + (x - X0) / (X1 - X0) * pw;
+  const by = (v) => padT + ph - v / top * ph;
+
+  ctx.font = '18px ' + FONT;
+  // grid and y ticks
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = '#e1e6eb';
+  ctx.fillStyle = COL.muted;
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  for (let v = 0; v <= top + 1e-9; v += tick) {
+    const y = Math.round(by(v)) + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(padL, y);
+    ctx.lineTo(padL + pw, y);
+    ctx.stroke();
+    ctx.fillText(String(v), padL - 8, y);
+  }
+  // axis titles
+  ctx.textBaseline = 'top';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = COL.ink;
+  ctx.fillText(isMM ? '板の厚み [mm]' : '遅れ [µs]', 0, 2);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = COL.muted;
+  ctx.fillText('横軸：素子の位置', W, 2);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(padL, padT - 4, pw, ph + 4);
+  ctx.clip();
+  if (isMM) {
+    // C: the cross-section of the plate itself
+    ctx.beginPath();
+    ctx.moveTo(bx(b.x0), by(0));
+    for (const p of prof) ctx.lineTo(bx(p[0]), by(p[1]));
+    ctx.lineTo(bx(b.x1), by(0));
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(247, 200, 115, 0.5)';
+    ctx.fill();
+  }
+  ctx.beginPath();
+  prof.forEach((p, i) => (i ? ctx.lineTo(bx(p[0]), by(p[1])) : ctx.moveTo(bx(p[0]), by(p[1]))));
+  ctx.strokeStyle = isMM ? COL.plateEdge : COL.low;
+  ctx.globalAlpha = 0.7;
+  ctx.lineWidth = 2;
+  ctx.setLineDash(isMM ? [] : [6, 4]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
+  // bars
+  const bw = 4.4 / (X1 - X0) * pw;
+  ctx.fillStyle = isMM ? COL.plateBar : COL.low;
+  for (let i = 0; i < b.xs.length; i++) {
+    const x = bx(b.xs[i]);
+    const hgt = Math.max(2, by(0) - by(b.vals[i]));
+    ctx.fillRect(x - bw / 2, by(0) - hgt, bw, hgt);
+  }
+  ctx.restore();
+
+  // baseline and x ticks
+  ctx.strokeStyle = COL.ink;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(padL, by(0));
+  ctx.lineTo(padL + pw, by(0));
+  ctx.stroke();
+  ctx.fillStyle = COL.muted;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  for (const xv of [-30, 0, 30]) {
+    const x = bx(xv);
+    ctx.beginPath();
+    ctx.moveTo(x, by(0));
+    ctx.lineTo(x, by(0) + 5);
+    ctx.stroke();
+    ctx.fillText(xv === 30 ? '30 mm' : fmtTick(xv), x, by(0) + 7);
+  }
+}
+
+/* =====================================================================
+   7. Controls
+   ===================================================================== */
+const geoRadios = Array.from(document.querySelectorAll('input[name="geo"]'));
+const btnWave = $('btnWave'), btnField = $('btnField');
+const phaseIn = $('phase'), fxIn = $('fx'), fyIn = $('fy'), timeIn = $('time');
+const phaseOut = $('phaseVal'), fxOut = $('fxVal'), fyOut = $('fyVal'), timeOut = $('timeVal');
+const rowPhase = $('rowPhase'), rowFx = $('rowFx'), rowFy = $('rowFy'), rowTime = $('rowTime');
+const playBtn = $('play'), playIcon = $('playIcon');
+const barTitle = $('barTitle'), barSub = $('barSub'), barInfo = $('barInfo');
+const PLAY_D = 'M7 4.5 L19.5 12 L7 19.5 Z';
+const PAUSE_D = 'M6 4.5 h4.5 v15 h-4.5 Z M13.5 4.5 h4.5 v15 h-4.5 Z';
+
+function fmtSigned(v) {
+  if (Math.abs(v) < 1e-9) return '0.0';
+  return (v < 0 ? '−' : '+') + Math.abs(v).toFixed(1);
+}
+
+function setEnabled(row, inputs, on) {
+  row.classList.toggle('off', !on);
+  inputs.forEach(el => { el.disabled = !on; });
+}
+
+function syncTime() {
+  timeIn.value = state.t.toFixed(1);
+  timeOut.textContent = state.t.toFixed(1) + ' µs';
+}
+
+function updateControls() {
+  const g = state.geo;
+  geoRadios.forEach(r => { r.checked = (r.value === g); });
+  btnWave.setAttribute('aria-pressed', String(state.view === 'wave'));
+  btnField.setAttribute('aria-pressed', String(state.view === 'field'));
+
+  setEnabled(rowPhase, [phaseIn], g !== 'C');
+  setEnabled(rowFx, [fxIn], g !== 'A');
+  setEnabled(rowFy, [fyIn], g !== 'A');
+  setEnabled(rowTime, [timeIn, playBtn], state.view === 'wave');
+
+  phaseIn.value = state.phaseDeg;
+  phaseOut.textContent = g === 'C' ? '—' : state.phaseDeg + '°';
+  // In A the focus is fixed at the centre of the caps.
+  const fx = g === 'A' ? 0 : state.fx, fy = g === 'A' ? 0 : state.fy;
+  fxIn.value = fx;
+  fyIn.value = fy;
+  fxOut.textContent = fmtSigned(fx) + ' mm';
+  fyOut.textContent = fmtSigned(fy) + ' mm';
+
+  barTitle.textContent = CAPTIONS[g][0];
+  barSub.textContent = CAPTIONS[g][1];
+  syncTime();
+}
+
+let model = buildModel();
+
+function onParamsChanged() {
+  model = buildModel();
+  updateControls();
+  requestRender();
+}
+
+let renderPending = false;
+function requestRender() {
+  if (renderPending) return;
+  renderPending = true;
+  requestAnimationFrame(() => {
+    renderPending = false;
+    renderView();
+    renderBars();
+  });
+}
+
+/* ---------- animation ---------- */
+let rafId = 0;
+let lastTs = null;
+
+function tick(ts) {
+  rafId = 0;
+  if (!state.playing) return;
+  if (lastTs !== null) {
+    const dt = Math.min(100, Math.max(0, ts - lastTs)) / 1000;   // s, capped after a stall
+    state.t += dt * PLAY_RATE;
+    if (state.t >= T_END) state.t -= T_END;
+  }
+  lastTs = ts;
+  syncTime();
+  renderView();
+  rafId = requestAnimationFrame(tick);
+}
+
+function setPlaying(on) {
+  state.playing = !!on && state.view === 'wave';
+  playIcon.setAttribute('d', state.playing ? PAUSE_D : PLAY_D);
+  playBtn.setAttribute('aria-label', state.playing ? '一時停止' : '再生');
+  if (state.playing && !rafId) {
+    lastTs = null;
+    rafId = requestAnimationFrame(tick);
+  }
+}
+
+function setView(v) {
+  state.view = v;
+  if (v !== 'wave') setPlaying(false);
+  updateControls();
+  requestRender();
+}
+
+/* ---------- events ---------- */
+geoRadios.forEach(r => r.addEventListener('change', () => {
+  if (r.checked) { state.geo = r.value; onParamsChanged(); }
+}));
+btnWave.addEventListener('click', () => setView('wave'));
+btnField.addEventListener('click', () => setView('field'));
+phaseIn.addEventListener('input', () => { state.phaseDeg = Number(phaseIn.value); onParamsChanged(); });
+fxIn.addEventListener('input', () => { state.fx = Number(fxIn.value); onParamsChanged(); });
+fyIn.addEventListener('input', () => { state.fy = Number(fyIn.value); onParamsChanged(); });
+timeIn.addEventListener('input', () => {
+  state.t = Number(timeIn.value);
+  timeOut.textContent = state.t.toFixed(1) + ' µs';
+  requestRender();
+});
+playBtn.addEventListener('click', () => setPlaying(!state.playing));
+window.addEventListener('resize', fitStage);
+window.addEventListener('load', fitStage);
+
+/* ---------- start ---------- */
+barInfo.textContent = Math.round(FREQ * 1000) + ' kHz，λ = ' + LAMBDA.toFixed(1) + ' mm';
+updateControls();
+fitStage();
+</script>
+</body>
+</html>
