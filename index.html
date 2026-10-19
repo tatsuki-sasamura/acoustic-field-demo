@@ -180,9 +180,9 @@
     cursor: pointer;
   }
   #gear {
-    width: 30px;
-    height: 30px;
-    margin-left: 6px;
+    width: 28px;
+    height: 28px;
+    margin-left: 2px;
     padding: 0;
     border: 1px solid var(--accent);
     border-radius: 8px;
@@ -306,10 +306,10 @@
       <span class="lab">
         <button type="button" id="play" aria-label="再生">
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path id="playIcon" d="M7 4.5 L19.5 12 L7 19.5 Z" fill="currentColor"></path></svg>
-        </button>時刻
+        </button>時刻<button type="button" id="gear" aria-label="素元波の減衰の設定" aria-expanded="false">&#9881;</button>
       </span>
       <input type="range" id="time" min="0" max="600" step="0.5" value="150" aria-label="時刻">
-      <output id="timeVal">150.0 µs<button type="button" id="gear" aria-label="素元波の減衰の設定" aria-expanded="false">&#9881;</button></output>
+      <output id="timeVal">150.0 µs</output>
     </div>
     <div id="fadePop" hidden>
       <div class="ctl" id="rowFade0">
