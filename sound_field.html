@@ -203,6 +203,25 @@
     flex: none;
   }
   #fadePop .ctl { height: 36px; }
+  #urlBox {
+    width: 100%;
+    min-width: 0;
+    font: 14px/1.2 ui-monospace, Consolas, monospace;
+    padding: 4px 6px;
+    border: 1px solid #b8c4d0;
+    border-radius: 6px;
+    background: #f7f9fb;
+  }
+  #copyUrl {
+    height: 30px;
+    padding: 0 10px;
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    background: #ffffff;
+    color: var(--accent);
+    font-size: 15px;
+    cursor: pointer;
+  }
   #play:disabled { cursor: default; }
   #play:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
@@ -327,6 +346,21 @@
         <input type="range" id="fadeA" min="0.1" max="1" step="0.05" value="0.6" aria-label="素元波の濃さ">
         <output id="fadeAVal">0.60</output>
       </div>
+      <div class="ctl" id="rowCs">
+        <span class="lab">音速</span>
+        <input type="range" id="cs" min="100" max="1600" step="10" value="343" aria-label="音速 (m/s)">
+        <output id="csVal">343 m/s</output>
+      </div>
+      <div class="ctl" id="rowTmax">
+        <span class="lab">時刻の上限</span>
+        <input type="range" id="tmax" min="100" max="3000" step="50" value="600" aria-label="再生時間の上限 (µs)">
+        <output id="tmaxVal">600 µs</output>
+      </div>
+      <div class="ctl" id="rowUrl">
+        <span class="lab">この設定の URL</span>
+        <input type="text" id="urlBox" readonly aria-label="現在の設定を含む URL">
+        <button type="button" id="copyUrl">コピー</button>
+      </div>
     </div>
 
     <div id="barHead">
@@ -343,10 +377,10 @@
 /* =====================================================================
    1. Physical model (lengths in mm, times in µs)
    ===================================================================== */
-const C_AIR  = 0.343;                  // speed of sound in air: 343 m/s = 0.343 mm/µs
+let   C_AIR  = 0.343;                  // speed of sound in air: 343 m/s = 0.343 mm/µs
 const FREQ   = 0.040;                  // drive frequency: 40 kHz = 0.040 cycles per µs
 const PERIOD = 1 / FREQ;               // T = 25 µs
-const LAMBDA = C_AIR / FREQ;           // λ = 8.575 mm
+let   LAMBDA = C_AIR / FREQ;           // λ = 8.575 mm
 const K_WAVE = 2 * Math.PI / LAMBDA;   // wavenumber k [rad/mm]
 const OMEGA  = 2 * Math.PI * FREQ;     // angular frequency ω [rad/µs]
 
@@ -365,7 +399,7 @@ const PITCH      = 2 * APERTURE / (N_LINE - 1);    // element pitch of the flat 
 // Hologram plate (C). Sound is faster in the plate than in air, so a plate of
 // thickness h lets the wave arrive earlier by h (1/c_air - 1/c_plate).
 const C_PLATE      = 2.5;                              // 2500 m/s (typical 3D-printing resin)
-const PLATE_PER_US = 1 / (1 / C_AIR - 1 / C_PLATE);    // plate thickness per µs of advance [mm/µs]
+let   PLATE_PER_US = 1 / (1 / C_AIR - 1 / C_PLATE);    // plate thickness per µs of advance [mm/µs]
 const PLATE_BASE   = 2;                                // thinnest part of the plate [mm]
 
 const BACKING = 5;   // drawn thickness of the transducer backing and of the reflector [mm]
@@ -373,7 +407,7 @@ const R_MIN   = 1;   // r is limited to >= 1 mm in the field sum (avoids 1/sqrt(
 
 // View and animation
 const Y_HALF    = 64;    // the plot shows y in [-64, 64] mm; the x range follows from the aspect ratio
-const T_END     = 600;   // length of the time axis [µs]
+let   T_END     = 600;   // length of the time axis [µs]
 const PLAY_RATE = 40;    // playback speed [µs of simulated time per second of real time]
 const LEGEND_H  = 40;    // height of the legend strip under the plot [px of the 960x540 stage]
 
@@ -478,7 +512,7 @@ function buildModel() {
     // later by (R - d(x))/c. This is exactly the drive delay B uses there.
     const curve = (x) => (R - Math.hypot(x, LINE_Y)) / C_AIR;
     m.bars = { xs: low.map(s => s.x), vals: low.map(s => curve(s.x)), curve, x0: -APERTURE, x1: APERTURE, unit: 'us' };
-    m.key = 'A|' + state.phaseDeg;
+    m.key = 'A|' + state.phaseDeg + '|' + C_AIR;
   } else {
     const F = { x: state.fx, y: state.fy };
     m.F = F;
@@ -498,7 +532,7 @@ function buildModel() {
       m.halves.push(makeHalf('low', low, F, -Y, Y));
       m.halves.push(makeHalf('up', up, F, -Y, Y));
       m.bars = { xs, vals: xs.map(tauLow), curve: tauLow, x0: -APERTURE, x1: APERTURE, unit: 'us' };
-      m.key = 'B|' + state.phaseDeg + '|' + F.x + '|' + F.y;
+      m.key = 'B|' + state.phaseDeg + '|' + F.x + '|' + F.y + '|' + C_AIR;
     } else {
       // (3) Plate: one flat line driven uniformly; the plate turns the uniform
       // drive into the same per-element delays as in B (modelled as such).
@@ -517,7 +551,7 @@ function buildModel() {
       const thick = (x) => PLATE_BASE + PLATE_PER_US * (tauRef - tauLow(x));
       m.plate = { x0: xa, x1: xb, h: thick };
       m.bars = { xs, vals: xs.map(thick), curve: thick, x0: xa, x1: xb, unit: 'mm' };
-      m.key = 'C|' + F.x + '|' + F.y;
+      m.key = 'C|' + F.x + '|' + F.y + '|' + C_AIR;
     }
   }
 
@@ -1256,6 +1290,7 @@ function setEnabled(row, inputs, on) {
 }
 
 function syncTime() {
+  syncUrlBox();
   timeIn.value = state.t.toFixed(1);
   timeOut.textContent = state.t.toFixed(1) + ' µs';
 }
@@ -1287,6 +1322,42 @@ function updateControls() {
 
 // Initial state from the URL, so that each slide opens on its own view:
 //   ?geo=A|B|C  &view=wave|field  &phase=<deg>  &fx=<mm>  &fy=<mm>  &t=<µs>  &play=1
+const STORE_KEY = 'sound_field_settings_v1';
+function loadSaved() {
+  try {
+    const v = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+    if (!v) return;
+    if (Number.isFinite(v.fade0)) WAVELET_FADE_START = v.fade0;
+    if (Number.isFinite(v.fade1)) WAVELET_FADE_END = v.fade1;
+    if (Number.isFinite(v.alpha)) WAVELET_ALPHA = v.alpha;
+    if (Number.isFinite(v.c)) setSoundSpeed(v.c);
+    if (Number.isFinite(v.tmax)) T_END = v.tmax;
+  } catch (e) { /* storage unavailable: defaults stay */ }
+}
+function saveSettings() {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify({
+      fade0: WAVELET_FADE_START, fade1: WAVELET_FADE_END, alpha: WAVELET_ALPHA,
+      c: Math.round(C_AIR * 1000), tmax: T_END }));
+  } catch (e) { /* ignore */ }
+}
+function currentUrl() {
+  const u = new URL(window.location.href);
+  u.search = '';
+  const q = u.searchParams;
+  q.set('geo', state.geo); q.set('view', state.view);
+  q.set('phase', state.phaseDeg); q.set('fx', state.fx); q.set('fy', state.fy);
+  q.set('t', state.t.toFixed(1));
+  if (state.playing || state.autoplay) q.set('play', '1');
+  q.set('fade0', WAVELET_FADE_START); q.set('fade1', WAVELET_FADE_END); q.set('alpha', WAVELET_ALPHA);
+  q.set('c', Math.round(C_AIR * 1000)); q.set('tmax', T_END);
+  return u.toString();
+}
+function syncUrlBox() {
+  const el = document.getElementById('urlBox');
+  if (el) el.value = currentUrl();
+}
+loadSaved();
 (function initFromUrl() {
   const q = new URLSearchParams(window.location.search);
   const geo = (q.get('geo') || '').toUpperCase();
@@ -1304,6 +1375,8 @@ function updateControls() {
   const f0 = num('fade0', 0, 6); if (f0 !== null) WAVELET_FADE_START = f0;
   const f1 = num('fade1', 0.25, 8); if (f1 !== null) WAVELET_FADE_END = f1;
   const al = num('alpha', 0.1, 1); if (al !== null) WAVELET_ALPHA = al;
+  const cs = num('c', 100, 1600); if (cs !== null) setSoundSpeed(cs);
+  const tm = num('tmax', 100, 3000); if (tm !== null) T_END = tm;
   if (WAVELET_FADE_END <= WAVELET_FADE_START) WAVELET_FADE_END = WAVELET_FADE_START + 0.25;
   state.autoplay = q.get('play') === '1';
 })();
@@ -1312,6 +1385,19 @@ function updateControls() {
 const gearBtn = $('gear'), fadePop = $('fadePop');
 const fade0In = $('fade0'), fade1In = $('fade1'), fadeAIn = $('fadeA');
 const fade0Out = $('fade0Val'), fade1Out = $('fade1Val'), fadeAOut = $('fadeAVal');
+const csIn = $('cs'), csOut = $('csVal'), tmaxIn = $('tmax'), tmaxOut = $('tmaxVal');
+
+function setSoundSpeed(ms) {
+  C_AIR = ms / 1000;                                   // mm/µs
+  LAMBDA = C_AIR / FREQ;
+  PLATE_PER_US = 1 / (1 / C_AIR - 1 / C_PLATE);
+}
+function syncPhys() {
+  csIn.value = Math.round(C_AIR * 1000); csOut.textContent = Math.round(C_AIR * 1000) + ' m/s';
+  tmaxIn.value = T_END; tmaxOut.textContent = T_END + ' µs';
+  timeIn.max = T_END;
+  $('barInfo').textContent = Math.round(FREQ * 1000) + ' kHz，λ = ' + LAMBDA.toFixed(1) + ' mm';
+}
 
 function syncFade() {
   fade0In.value = WAVELET_FADE_START; fade0Out.textContent = WAVELET_FADE_START.toFixed(2).replace(/\.?0+$/, '') + ' λ';
@@ -1327,14 +1413,24 @@ gearBtn.addEventListener('click', () => {
 fade0In.addEventListener('input', () => {
   WAVELET_FADE_START = Number(fade0In.value);
   if (WAVELET_FADE_END <= WAVELET_FADE_START) WAVELET_FADE_END = WAVELET_FADE_START + 0.25;
-  syncFade(); requestRender();
+  syncFade(); saveSettings(); requestRender();
 });
 fade1In.addEventListener('input', () => {
   WAVELET_FADE_END = Number(fade1In.value);
   if (WAVELET_FADE_START >= WAVELET_FADE_END) WAVELET_FADE_START = Math.max(0, WAVELET_FADE_END - 0.25);
-  syncFade(); requestRender();
+  syncFade(); saveSettings(); requestRender();
 });
-fadeAIn.addEventListener('input', () => { WAVELET_ALPHA = Number(fadeAIn.value); syncFade(); requestRender(); });
+fadeAIn.addEventListener('input', () => { WAVELET_ALPHA = Number(fadeAIn.value); syncFade(); saveSettings(); requestRender(); });
+csIn.addEventListener('input', () => { setSoundSpeed(Number(csIn.value)); syncPhys(); saveSettings(); onParamsChanged(); });
+tmaxIn.addEventListener('input', () => {
+  T_END = Number(tmaxIn.value);
+  if (state.t > T_END) state.t = T_END;
+  syncPhys(); saveSettings(); syncTime(); requestRender();
+});
+$('copyUrl').addEventListener('click', () => {
+  const el = $('urlBox'); el.select();
+  try { navigator.clipboard.writeText(el.value); } catch (e) { document.execCommand('copy'); }
+});
 syncFade();
 
 let model = buildModel();
@@ -1347,6 +1443,7 @@ function onParamsChanged() {
 
 let renderPending = false;
 function requestRender() {
+  syncUrlBox();
   if (renderPending) return;
   renderPending = true;
   requestAnimationFrame(() => {
@@ -1410,7 +1507,7 @@ window.addEventListener('resize', fitStage);
 window.addEventListener('load', fitStage);
 
 /* ---------- start ---------- */
-barInfo.textContent = Math.round(FREQ * 1000) + ' kHz，λ = ' + LAMBDA.toFixed(1) + ' mm';
+syncPhys();
 updateControls();
 fitStage();
 if (state.autoplay) setPlaying(true);
