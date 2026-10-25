@@ -473,6 +473,8 @@ const R_MIN   = 1;   // r is limited to >= 1 mm in the field sum (avoids 1/sqrt(
 const Y_HALF    = 64;    // the plot shows y in [-64, 64] mm; the x range follows from the aspect ratio
 let   T_END     = 600;   // length of the time axis [µs]
 const PLAY_RATE = 40;    // playback speed [µs of simulated time per second of real time]
+const FLASH_FRAC = 0.35; // a source lights up for this fraction of a period after each emission
+const FLASH_COL = '#ffd43b';
 const LEGEND_H  = 40;    // height of the legend strip under the plot [px of the 960x540 stage]
 
 const FONT = '"BIZ UDPGothic", "Meiryo", "Yu Gothic UI", "Hiragino Sans", "Noto Sans JP", sans-serif';
@@ -938,6 +940,18 @@ function fillStroke(ctx, fill, stroke, lw) {
   ctx.stroke();
 }
 
+// 1 at the instant a source emits a wavelet, fading to 0 over FLASH_FRAC of a period; 0 before its first emission.
+function flashOf(s, t) {
+  if (t === null || t === undefined) return 0;
+  const age = t - s.e;
+  if (age <= 0) return 0;
+  const ph = (age % PERIOD) / PERIOD;
+  return ph < FLASH_FRAC ? 1 - ph / FLASH_FRAC : 0;
+}
+function mixColor(a, b, f) {
+  const pa = a.match(/[0-9a-f]{2}/gi).map(h => parseInt(h, 16)), pb = b.match(/[0-9a-f]{2}/gi).map(h => parseInt(h, 16));
+  return 'rgb(' + pa.map((v, i) => Math.round(v + (pb[i] - v) * f)).join(',') + ')';
+}
 function dot(ctx, x, y, r, color) {
   ctx.beginPath();
   ctx.arc(x, y, r, 0, 2 * Math.PI);
@@ -1028,6 +1042,11 @@ function drawLegend(ctx, m) {
     sample(4.5, 1); label(m.geo === 'C' ? '波面' : '包絡面'); x += 18;
     dot(ctx, x + 6, cy, 6, COL.low); x += 16; label('下'); x += 14;
     dot(ctx, x + 6, cy, 6, COL.up); x += 16; label(m.geo === 'C' ? '反射' : '上');
+    if (m.geo !== 'C') {
+      x += 14;
+      ctx.save(); ctx.globalAlpha = 0.45; ctx.beginPath(); ctx.arc(x + 6, cy, 11, 0, 2 * Math.PI); ctx.fillStyle = FLASH_COL; ctx.fill(); ctx.restore();
+      dot(ctx, x + 6, cy, 7, mixColor(COL.low, FLASH_COL, 0.9)); x += 18; label('素元波を出す瞬間');
+    }
     if (m.geo === 'B') { x += 12; sample(5, 0.9); label('遅れ'); }
   } else {
     label('振幅'); x += 8;
@@ -1105,7 +1124,7 @@ function platePath(ctx, plate) {
   ctx.closePath();
 }
 
-function drawDevice(ctx, m) {
+function drawDevice(ctx, m, t) {
   ctx.save();
   clipToPlot(ctx);
   ctx.lineJoin = 'round';
@@ -1153,7 +1172,16 @@ function drawDevice(ctx, m) {
   if (m.geo !== 'C') {
     for (const h of m.halves) {
       if (h.kind === 'img') continue;
-      for (const s of h.src) dot(ctx, sx(s.x), sy(s.y), 5.5, halfColor(h));
+      for (const s of h.src) {
+        // The dot lights up (yellow, larger) at the moment a wavelet leaves it, so the
+        // timing of the flashes shows the delays between the sources.
+        const f = flashOf(s, t), x = sx(s.x), y = sy(s.y);
+        if (f > 0) {
+          ctx.save(); ctx.globalAlpha = 0.45 * f; ctx.beginPath(); ctx.arc(x, y, 5.5 + 9 * f, 0, 2 * Math.PI);
+          ctx.fillStyle = FLASH_COL; ctx.fill(); ctx.restore();
+        }
+        dot(ctx, x, y, 5.5 + 2.5 * f, f > 0 ? mixColor(halfColor(h), FLASH_COL, Math.min(1, 0.25 + f)) : halfColor(h));
+      }
     }
   }
   if (m.geo === 'C') {
@@ -1350,7 +1378,7 @@ function renderView() {
     for (const h of m.halves) drawEnvelopes(ctx, h, state.t, 'halo');
     for (const h of m.halves) drawEnvelopes(ctx, h, state.t, 'line');
   }
-  drawDevice(ctx, m);
+  drawDevice(ctx, m, state.view === 'wave' ? state.t : null);
   if (state.view === 'wave' && m.geo === 'C') {
     // The fronts inside the plate are drawn over the plate body (it is filled opaque).
     drawPlateFronts(ctx, m, state.t, 'halo');
