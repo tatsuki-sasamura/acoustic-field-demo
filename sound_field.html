@@ -39,8 +39,8 @@
     height: 540px;
     transform-origin: 0 0;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(380px, 470px);
-    grid-template-rows: 48px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) 364px;
+    grid-template-rows: minmax(0, 1fr);
     gap: 8px;
     padding: 8px;
   }
@@ -48,27 +48,41 @@
   /* Portrait (phone) layout: a 540 x 960 stage, the view above the panel. */
   #stage.portrait {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(160px, 1fr) auto;
+    grid-template-rows: minmax(160px, 1fr) auto;
   }
-  #stage.portrait #barBox { flex: none; height: 150px; }
-  #fadePop:not([hidden]) ~ #barHead, #fadePop:not([hidden]) ~ #barBox { display: none; }
   #panel { overflow-y: auto; }
-  #barBox { max-height: 280px; }
-  #stage.portrait #topbar { grid-column: 1; flex-wrap: wrap; justify-content: center; row-gap: 6px; }
-  #stage.portrait #viewBox { grid-row: 2; grid-column: 1; }
-  #stage.portrait #panel { grid-row: 3; grid-column: 1; }
+  #stage.portrait #viewBox { grid-row: 1; grid-column: 1; }
+  #stage.portrait #panel { grid-row: 2; grid-column: 1; max-height: 55%; }
   #stage.portrait .seg .opt { font-size: 15px; padding: 0 7px; }
-  #stage.portrait #topbar, #stage.portrait #panel, #stage.portrait #viewBox { min-width: 0; }
-  #stage.portrait .ctl { grid-template-columns: 112px 1fr 92px; height: 40px; }
+  #stage.portrait #panel, #stage.portrait #viewBox { min-width: 0; }
 
-  /* ---------- top bar: geometry radios + view toggle ---------- */
-  #topbar {
-    grid-column: 1 / 3;
+  /* ---------- panel head: geometry radios, view toggle, legend ---------- */
+  .segRow {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: 8px;
+    flex: none;
+    min-height: 46px;
   }
+  #legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 18px;
+    flex: none;
+    min-height: 36px;
+    padding: 0 2px 4px;
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 2px;
+  }
+  #legend .lg { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+  #legend .ln { display: inline-block; width: 26px; border-top: 1.5px solid #e8590c; opacity: 0.8; }
+  #legend .ln.thick { border-top-width: 4.5px; border-radius: 3px; opacity: 1; }
+  #legend .nodeDot { display: inline-block; width: 10px; height: 10px; border: 2px solid #e03131; border-radius: 50%; }
+  #legend canvas { width: 100px; height: 16px; display: inline-block; }
+  #legend.wave .fieldOnly, #legend.field .waveOnly { display: none; }
+  #physInfo { color: var(--muted); font-size: 15px; white-space: nowrap; margin-left: auto; }
   .seg {
     display: flex;
     border: 2px solid var(--accent);
@@ -91,10 +105,10 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    height: 44px;
-    padding: 0 12px;
+    height: 40px;
+    padding: 0 9px;
     font: inherit;
-    font-size: 18px;
+    font-size: 17px;
     color: var(--accent);
     background: var(--card);
     border: 0;
@@ -130,7 +144,7 @@
 
   /* ---------- main view (device / field) ---------- */
   #viewBox {
-    grid-row: 2;
+    grid-row: 1;
     grid-column: 1;
     position: relative;
     background: var(--card);
@@ -138,8 +152,7 @@
     overflow: hidden;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
   }
-  #viewBox canvas,
-  #barBox canvas {
+  #viewBox canvas {
     position: absolute;
     left: 0;
     top: 0;
@@ -148,9 +161,9 @@
     display: block;
   }
 
-  /* ---------- right panel: sliders + bar graph ---------- */
+  /* ---------- right panel: switches, legend, sliders ---------- */
   #panel {
-    grid-row: 2;
+    grid-row: 1;
     grid-column: 2;
     min-height: 0;
     display: flex;
@@ -163,7 +176,7 @@
   }
   .ctl {
     display: grid;
-    grid-template-columns: 128px 1fr 100px;
+    grid-template-columns: 108px 1fr 86px;
     align-items: center;
     column-gap: 10px;
     height: 44px;
@@ -195,13 +208,10 @@
     justify-content: center;
     cursor: pointer;
   }
-  #topRight { display: flex; align-items: center; gap: 8px; }
   #gear {
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 44px;
-    height: 44px;
+    flex: none;
+    width: 40px;
+    height: 40px;
     margin: 0;
     padding: 0;
     border: 0;
@@ -216,7 +226,6 @@
     border-radius: 10px;
   }
   #gear[aria-expanded="true"] { background: #222222; }
-  #topbar { padding-right: 48px; }
   #fadePop {
     border: 1px solid var(--accent);
     border-radius: 10px;
@@ -301,53 +310,33 @@
     box-shadow: 0 0 0 1px var(--accent);
   }
 
-  #barHead {
-    flex: none;
-    margin-top: 4px;
-    padding-top: 6px;
-    border-top: 1px solid var(--rule);
-  }
-  #barTitleRow {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 8px;
-  }
-  #barTitle { font-size: 22px; font-weight: bold; }
-  #barInfo { color: var(--muted); white-space: nowrap; }
-  #barSub { color: var(--muted); white-space: nowrap; }
-  #barBox {
-    position: relative;
-    flex: 1;
-    min-height: 0;
-    margin-top: 4px;
-  }
 </style>
 </head>
 <body>
 <div id="stage">
-  <div id="topbar">
-    <div class="seg" role="radiogroup" aria-label="遅れの作り方">
-      <label><input type="radio" name="geo" value="A" checked><span class="opt"><span class="dot"></span>球面（形）</span></label>
-      <label><input type="radio" name="geo" value="B"><span class="opt"><span class="dot"></span>平面アレイ（信号）</span></label>
-      <label><input type="radio" name="geo" value="C"><span class="opt"><span class="dot"></span>ホログラム（板の厚み）</span></label>
+  <div id="viewBox"><canvas id="view" aria-label="装置と音場の図"></canvas></div>
+
+  <div id="panel">
+    <div class="segRow">
+      <div class="seg" role="radiogroup" aria-label="遅れの作り方">
+        <label><input type="radio" name="geo" value="A"><span class="opt"><span class="dot"></span>球面</span></label>
+        <label><input type="radio" name="geo" value="B" checked><span class="opt"><span class="dot"></span>アレイ</span></label>
+        <label><input type="radio" name="geo" value="C"><span class="opt"><span class="dot"></span>ホログラム</span></label>
+      </div>
+      <button type="button" id="gear" aria-label="設定" aria-expanded="false">&#9881;</button>
     </div>
-    <div id="topRight">
+    <div class="segRow">
       <div class="seg" role="group" aria-label="表示">
         <button type="button" class="opt" id="btnWave" aria-pressed="true">素元波と包絡面</button>
         <button type="button" class="opt" id="btnField" aria-pressed="false">音圧分布</button>
       </div>
     </div>
-  </div>
-  <button type="button" id="gear" aria-label="設定" aria-expanded="false">&#9881;</button>
-
-  <div id="viewBox"><canvas id="view" aria-label="装置と音場の図"></canvas></div>
-
-  <div id="panel">
-    <div class="ctl" id="rowPhase">
-      <span class="lab">上下の位相差</span>
-      <input type="range" id="phase" min="0" max="360" step="5" value="0" aria-label="上下の位相差">
-      <output id="phaseVal">0°</output>
+    <div id="legend" class="wave">
+      <span class="lg waveOnly"><i class="ln"></i>素元波</span>
+      <span class="lg waveOnly"><i class="ln thick"></i>包絡面</span>
+      <span class="lg fieldOnly">振幅 0<canvas id="lgGrad" width="100" height="16"></canvas>大</span>
+      <span class="lg fieldOnly"><i class="nodeDot"></i>節</span>
+      <span id="physInfo"></span>
     </div>
     <div class="ctl" id="rowFx">
       <span class="lab">焦点 X</span>
@@ -359,30 +348,35 @@
       <input type="range" id="fy" min="-10" max="10" step="0.5" value="0" aria-label="焦点 Y">
       <output id="fyVal">0.0 mm</output>
     </div>
-    <div class="ctl" id="rowRefl">
-      <span class="lab">反射板の高さ</span>
-      <input type="range" id="refl" min="0" max="45" step="0.5" value="4.3" aria-label="反射板の高さ (焦点からの距離)">
-      <output id="reflVal">+4.3 mm</output>
-    </div>
     <div class="ctl" id="rowTime">
       <span class="lab">
         <button type="button" id="play" aria-label="再生">
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path id="playIcon" d="M7 4.5 L19.5 12 L7 19.5 Z" fill="currentColor"></path></svg>
         </button>時刻
       </span>
-      <input type="range" id="time" min="0" max="600" step="0.5" value="150" aria-label="時刻">
-      <output id="timeVal">150.0 µs</output>
+      <input type="range" id="time" min="0" max="600" step="0.5" value="511.2" aria-label="時刻">
+      <output id="timeVal">511.2 µs</output>
     </div>
     <div id="fadePop" hidden>
+      <div class="ctl" id="rowPhase">
+        <span class="lab">上下の位相差</span>
+        <input type="range" id="phase" min="0" max="360" step="5" value="0" aria-label="上下の位相差">
+        <output id="phaseVal">0°</output>
+      </div>
+      <div class="ctl" id="rowRefl">
+        <span class="lab">反射板の高さ</span>
+        <input type="range" id="refl" min="0" max="45" step="0.5" value="4.3" aria-label="反射板の高さ (焦点からの距離)">
+        <output id="reflVal">+4.3 mm</output>
+      </div>
       <div class="ctl" id="rowFade0">
         <span class="lab">消え始め</span>
-        <input type="range" id="fade0" min="0" max="6" step="0.25" value="1" aria-label="素元波が消え始める距離 (波長)">
-        <output id="fade0Val">1.0 λ</output>
+        <input type="range" id="fade0" min="0" max="6" step="0.25" value="0.5" aria-label="素元波が消え始める距離 (波長)">
+        <output id="fade0Val">0.5 λ</output>
       </div>
       <div class="ctl" id="rowFade1">
         <span class="lab">消える</span>
-        <input type="range" id="fade1" min="0.25" max="8" step="0.25" value="3" aria-label="素元波が完全に消える距離 (波長)">
-        <output id="fade1Val">3.0 λ</output>
+        <input type="range" id="fade1" min="0.25" max="8" step="0.25" value="1.5" aria-label="素元波が完全に消える距離 (波長)">
+        <output id="fade1Val">1.5 λ</output>
       </div>
       <div class="ctl" id="rowFadeA">
         <span class="lab">濃さ</span>
@@ -391,13 +385,13 @@
       </div>
       <div class="ctl" id="rowEfade0">
         <span class="lab">包絡面 消え始め</span>
-        <input type="range" id="efade0" min="0" max="20" step="0.5" value="12" aria-label="包絡面が消え始める距離 (波長)">
-        <output id="efade0Val">12 λ</output>
+        <input type="range" id="efade0" min="0" max="20" step="0.5" value="1" aria-label="包絡面が消え始める距離 (波長)">
+        <output id="efade0Val">1 λ</output>
       </div>
       <div class="ctl" id="rowEfade1">
         <span class="lab">包絡面 消える</span>
-        <input type="range" id="efade1" min="0.5" max="24" step="0.5" value="16" aria-label="包絡面が完全に消える距離 (波長)">
-        <output id="efade1Val">16 λ</output>
+        <input type="range" id="efade1" min="0.5" max="24" step="0.5" value="3" aria-label="包絡面が完全に消える距離 (波長)">
+        <output id="efade1Val">3 λ</output>
       </div>
       <div class="ctl" id="rowCs">
         <span class="lab">音速 (λ 一定)</span>
@@ -406,8 +400,8 @@
       </div>
       <div class="ctl" id="rowLam">
         <span class="lab">波長 (音速一定)</span>
-        <input type="range" id="lam" min="2" max="30" step="0.1" value="8.6" aria-label="波長 (mm)、音速は一定で周波数が変わる">
-        <output id="lamVal">8.6 mm</output>
+        <input type="range" id="lam" min="2" max="30" step="0.1" value="20" aria-label="波長 (mm)、音速は一定で周波数が変わる">
+        <output id="lamVal">20.0 mm</output>
       </div>
       <div class="ctl" id="rowCr">
         <span class="lab">板の音速比</span>
@@ -430,12 +424,6 @@
         <button type="button" id="resetAll">すべて初期値に戻す</button>
       </div>
     </div>
-
-    <div id="barHead">
-      <div id="barTitleRow"><span id="barTitle">形で遅れを作る</span><span id="barInfo"></span></div>
-      <div id="barSub"></div>
-    </div>
-    <div id="barBox"><canvas id="bars" aria-label="各素子の遅れ"></canvas></div>
   </div>
 </div>
 
@@ -446,9 +434,9 @@
    1. Physical model (lengths in mm, times in µs)
    ===================================================================== */
 let   C_AIR  = 0.343;                  // speed of sound in air: 343 m/s = 0.343 mm/µs
-let   FREQ   = 0.040;                  // drive frequency: 40 kHz = 0.040 cycles per µs
-let   PERIOD = 1 / FREQ;               // T = 25 µs
-let   LAMBDA = C_AIR / FREQ;           // λ = 8.575 mm
+let   LAMBDA = 20;                     // wavelength [mm]; ?lam= and the gear panel change it (the speed of sound stays)
+let   FREQ   = C_AIR / LAMBDA;         // drive frequency [cycles per µs]: 17 kHz at the default
+let   PERIOD = 1 / FREQ;               // T [µs]
 let   K_WAVE = 2 * Math.PI / LAMBDA;   // wavenumber k [rad/mm]
 let   OMEGA  = 2 * Math.PI * FREQ;     // angular frequency ω [rad/µs]
 
@@ -475,12 +463,12 @@ const BACKING = 5;   // drawn thickness of the transducer backing and of the ref
 const R_MIN   = 1;   // r is limited to >= 1 mm in the field sum (avoids 1/sqrt(0) at a source)
 
 // View and animation
-const Y_HALF    = 64;    // the plot shows y in [-64, 64] mm; the x range follows from the aspect ratio
+let   Y_HALF    = 64;    // the plot shows at least y in [-64, 64] mm and x in [-70, 70] mm; the larger axis follows from the aspect ratio
 let   T_END     = 600;   // length of the time axis [µs]
 const PLAY_RATE = 40;    // playback speed [µs of simulated time per second of real time]
 const FLASH_FRAC = 0.35; // a source lights up for this fraction of a period after each emission
 const FLASH_COL = '#ffd43b';
-const LEGEND_H  = 40;    // height of the legend strip under the plot [px of the 960x540 stage]
+const LEGEND_H  = 0;     // the legend sits in the panel; the plot uses the whole canvas
 
 const FONT = '"BIZ UDPGothic", "Meiryo", "Yu Gothic UI", "Hiragino Sans", "Noto Sans JP", sans-serif';
 const COL = {
@@ -513,20 +501,20 @@ const CAPTIONS = {
 // Wavelet fading, in wavelengths from the source (adjustable from the ⚙ panel
 // and from the URL: ?fade0=1&fade1=3&alpha=0.6).
 let WAVELET_ALPHA = 0.6;
-let WAVELET_FADE_START = 1;
-let WAVELET_FADE_END = 3;
+let WAVELET_FADE_START = 0.5;
+let WAVELET_FADE_END = 1.5;
 // Envelope fading, in wavelengths travelled from the array (?efade0=&efade1=).
-let ENV_FADE_START = 12;
-let ENV_FADE_END = 16;
+let ENV_FADE_START = 1;
+let ENV_FADE_END = 3;
 
 const state = {
-  geo: 'A',        // 'A' sphere caps, 'B' flat arrays with drive delays, 'C' plate + reflector
+  geo: 'B',        // 'A' sphere caps, 'B' flat arrays with drive delays, 'C' plate + reflector
   view: 'wave',    // 'wave' (wavelets and envelope) or 'field' (pressure amplitude)
   phaseDeg: 0,     // phase difference upper vs lower half [deg] (A, B)
   fx: 0,           // focus position [mm] (B, C)
   fy: 0,
   refl: 4.3,       // C: height of the flat reflector above the focus [mm] (λ/2 by default)
-  t: 150,          // time [µs] in the wavelet view
+  t: 511.2,        // time [µs] in the wavelet view
   playing: false,
 };
 
@@ -799,7 +787,7 @@ function gridDims() {
 // is kept as an ImageData in a small offscreen canvas.
 function ensureField(m) {
   const { nx, ny } = gridDims();
-  const key = m.key + '|' + nx + 'x' + ny + '|' + X_HALF.toFixed(3);
+  const key = m.key + '|' + nx + 'x' + ny + '|' + X_HALF.toFixed(3) + '|' + Y_HALF.toFixed(3);
   if (fieldCache.key === key && fieldCache.canvas) return;
 
   const fs = fieldSources(m);
@@ -860,9 +848,7 @@ function ensureField(m) {
 const $ = (id) => document.getElementById(id);
 const stage = $('stage');
 const viewCanvas = $('view');
-const barCanvas = $('bars');
 const vctx = viewCanvas.getContext('2d');
-const bctx = barCanvas.getContext('2d');
 
 let stageScale = 1;
 let VIEW_W = 470, VIEW_H = 468;
@@ -878,8 +864,9 @@ function layoutView() {
   VIEW_W = viewCanvas.clientWidth || 470;
   VIEW_H = viewCanvas.clientHeight || 468;
   PLOT = { x: 0, y: 0, w: VIEW_W, h: VIEW_H - LEGEND_H };
-  PX_PER_MM = PLOT.h / (2 * Y_HALF);
+  PX_PER_MM = Math.min(PLOT.h / (2 * 64), PLOT.w / (2 * 70));
   X_HALF = PLOT.w / 2 / PX_PER_MM;
+  Y_HALF = PLOT.h / 2 / PX_PER_MM;
 }
 
 // Backing store = displayed size x stage scale x devicePixelRatio, so the
@@ -913,7 +900,6 @@ function fitStage() {
   stage.style.transform = 'scale(' + stageScale + ')';
   layoutView();
   sizeCanvas(viewCanvas);
-  sizeCanvas(barCanvas);
   requestRender();
 }
 
@@ -1392,114 +1378,10 @@ function renderView() {
   drawFocus(ctx, m);
   if (state.view === 'field') drawNodes(ctx, m, fieldCache.nodes);
   drawBorder(ctx);
-  drawLegend(ctx, m);
 }
 
 /* ---------- bar graph: delay (A, B) or plate thickness (C) per lower source ---------- */
 function fmtTick(v) { return v < 0 ? '−' + Math.abs(v) : String(v); }
-
-function renderBars() {
-  const ctx = bctx, cv = barCanvas, b = model.bars;
-  const W = cv._w || 1, H = cv._h || 1;
-  ctx.setTransform(cv._kx || 1, 0, 0, cv._ky || 1, 0, 0);
-  ctx.clearRect(0, 0, W, H);
-  const isMM = b.unit === 'mm';
-  const padL = 48, padR = 14, padT = 30, padB = 30;
-  const pw = W - padL - padR, ph = H - padT - padB;
-  if (pw < 20 || ph < 20) return;
-
-  // Continuous profile (the same function the bars sample).
-  const NS = 120, prof = [];
-  for (let i = 0; i <= NS; i++) {
-    const x = b.x0 + (b.x1 - b.x0) * i / NS;
-    prof.push([x, b.curve(x)]);
-  }
-  let vmax = 0;
-  for (const p of prof) vmax = Math.max(vmax, p[1]);
-  for (const v of b.vals) vmax = Math.max(vmax, v);
-  // Axis top: a multiple of the tick step, at least 30 µs or 15 mm.
-  const tick = isMM ? (vmax <= 20 ? 5 : 10) : (vmax <= 40 ? 10 : 20);
-  const top = Math.max(isMM ? 15 : 30, Math.ceil(vmax / tick - 1e-6) * tick);
-  const X0 = -40, X1 = 40;
-  const bx = (x) => padL + (x - X0) / (X1 - X0) * pw;
-  const by = (v) => padT + ph - v / top * ph;
-
-  ctx.font = '18px ' + FONT;
-  // grid and y ticks
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = '#e1e6eb';
-  ctx.fillStyle = COL.muted;
-  ctx.textAlign = 'right';
-  ctx.textBaseline = 'middle';
-  for (let v = 0; v <= top + 1e-9; v += tick) {
-    const y = Math.round(by(v)) + 0.5;
-    ctx.beginPath();
-    ctx.moveTo(padL, y);
-    ctx.lineTo(padL + pw, y);
-    ctx.stroke();
-    ctx.fillText(String(v), padL - 8, y);
-  }
-  // axis titles
-  ctx.textBaseline = 'top';
-  ctx.textAlign = 'left';
-  ctx.fillStyle = COL.ink;
-  ctx.fillText(isMM ? '板の厚み [mm]' : '遅れ [µs]', 0, 2);
-  ctx.textAlign = 'right';
-  ctx.fillStyle = COL.muted;
-  ctx.fillText('横軸：素子の位置', W, 2);
-
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(padL, padT - 4, pw, ph + 4);
-  ctx.clip();
-  if (isMM) {
-    // C: the cross-section of the plate itself
-    ctx.beginPath();
-    ctx.moveTo(bx(b.x0), by(0));
-    for (const p of prof) ctx.lineTo(bx(p[0]), by(p[1]));
-    ctx.lineTo(bx(b.x1), by(0));
-    ctx.closePath();
-    ctx.fillStyle = 'rgba(247, 200, 115, 0.5)';
-    ctx.fill();
-  }
-  ctx.beginPath();
-  prof.forEach((p, i) => (i ? ctx.lineTo(bx(p[0]), by(p[1])) : ctx.moveTo(bx(p[0]), by(p[1]))));
-  ctx.strokeStyle = isMM ? COL.plateEdge : COL.low;
-  ctx.globalAlpha = 0.7;
-  ctx.lineWidth = 2;
-  ctx.setLineDash(isMM ? [] : [6, 4]);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.globalAlpha = 1;
-  // bars
-  const bw = 4.4 / (X1 - X0) * pw;
-  ctx.fillStyle = isMM ? COL.plateBar : COL.low;
-  for (let i = 0; i < b.xs.length; i++) {
-    const x = bx(b.xs[i]);
-    const hgt = Math.max(2, by(0) - by(b.vals[i]));
-    ctx.fillRect(x - bw / 2, by(0) - hgt, bw, hgt);
-  }
-  ctx.restore();
-
-  // baseline and x ticks
-  ctx.strokeStyle = COL.ink;
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(padL, by(0));
-  ctx.lineTo(padL + pw, by(0));
-  ctx.stroke();
-  ctx.fillStyle = COL.muted;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'top';
-  for (const xv of [-30, 0, 30]) {
-    const x = bx(xv);
-    ctx.beginPath();
-    ctx.moveTo(x, by(0));
-    ctx.lineTo(x, by(0) + 5);
-    ctx.stroke();
-    ctx.fillText(xv === 30 ? '30 mm' : fmtTick(xv), x, by(0) + 7);
-  }
-}
 
 /* =====================================================================
    7. Controls
@@ -1510,7 +1392,14 @@ const phaseIn = $('phase'), fxIn = $('fx'), fyIn = $('fy'), timeIn = $('time'), 
 const phaseOut = $('phaseVal'), fxOut = $('fxVal'), fyOut = $('fyVal'), timeOut = $('timeVal'), reflOut = $('reflVal');
 const rowPhase = $('rowPhase'), rowFx = $('rowFx'), rowFy = $('rowFy'), rowTime = $('rowTime'), rowRefl = $('rowRefl');
 const playBtn = $('play'), playIcon = $('playIcon');
-const barTitle = $('barTitle'), barSub = $('barSub'), barInfo = $('barInfo');
+const physInfo = $('physInfo'), legendEl = $('legend');
+(function drawLegendGradient() {
+  const cv = $('lgGrad'), c = cv.getContext('2d');
+  const g = c.createLinearGradient(0, 0, cv.width, 0);
+  for (let k = 0; k <= 20; k++) { const i = cmapIndex(k / 20); g.addColorStop(k / 20, 'rgb(' + CMAP[i] + ',' + CMAP[i + 1] + ',' + CMAP[i + 2] + ')'); }
+  c.fillStyle = g; c.fillRect(0, 0, cv.width, cv.height);
+  c.strokeStyle = '#b9c2cc'; c.lineWidth = 1; c.strokeRect(0.5, 0.5, cv.width - 1, cv.height - 1);
+})();
 const PLAY_D = 'M7 4.5 L19.5 12 L7 19.5 Z';
 const PAUSE_D = 'M6 4.5 h4.5 v15 h-4.5 Z M13.5 4.5 h4.5 v15 h-4.5 Z';
 
@@ -1552,14 +1441,13 @@ function updateControls() {
   fxOut.textContent = fmtSigned(fx) + ' mm';
   fyOut.textContent = fmtSigned(fy) + ' mm';
 
-  barTitle.textContent = CAPTIONS[g][0];
-  barSub.textContent = CAPTIONS[g][1];
+  legendEl.className = state.view;
   syncTime();
 }
 
 // Initial state from the URL, so that each slide opens on its own view:
 //   ?geo=A|B|C  &view=wave|field  &phase=<deg>  &fx=<mm>  &fy=<mm>  &t=<µs>  &play=1
-const STORE_KEY = 'sound_field_settings_v1';
+const STORE_KEY = 'sound_field_settings_v2';
 function loadSaved() {
   try {
     const v = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
@@ -1664,7 +1552,7 @@ function syncPhys() {
   tmaxIn.value = T_END; tmaxOut.textContent = T_END + ' µs';
   crIn.value = C_PLATE_RATIO; crOut.textContent = C_PLATE_RATIO.toFixed(1);
   timeIn.max = T_END;
-  $('barInfo').textContent = Math.round(FREQ * 1000) + ' kHz，λ = ' + LAMBDA.toFixed(1) + ' mm';
+  physInfo.textContent = Math.round(FREQ * 1000) + ' kHz, λ = ' + LAMBDA.toFixed(1) + ' mm';
 }
 
 function syncFade() {
@@ -1716,10 +1604,10 @@ tmaxIn.addEventListener('input', () => {
 });
 $('resetAll').addEventListener('click', () => {
   // Defaults of everything: the view state and the physical/drawing settings. The saved settings are cleared too.
-  WAVELET_ALPHA = 0.6; WAVELET_FADE_START = 1; WAVELET_FADE_END = 3;
-  ENV_FADE_START = 12; ENV_FADE_END = 16;
-  C_PLATE_RATIO = 2.5 / 0.343; setSoundSpeed(343); setWavelength(0.343 / 0.040); T_END = 600;
-  state.geo = 'A'; state.view = 'wave'; state.phaseDeg = 0; state.fx = 0; state.fy = 0; state.refl = 4.3; state.t = 150;
+  WAVELET_ALPHA = 0.6; WAVELET_FADE_START = 0.5; WAVELET_FADE_END = 1.5;
+  ENV_FADE_START = 1; ENV_FADE_END = 3;
+  C_PLATE_RATIO = 2.5 / 0.343; setSoundSpeed(343); setWavelength(20); T_END = 600;
+  state.geo = 'B'; state.view = 'wave'; state.phaseDeg = 0; state.fx = 0; state.fy = 0; state.refl = 4.3; state.t = 511.2;
   setPlaying(false);
   try { localStorage.removeItem(STORE_KEY); } catch (e) { /* ignore */ }
   syncFade(); syncPhys(); onParamsChanged();
@@ -1746,7 +1634,6 @@ function requestRender() {
   requestAnimationFrame(() => {
     renderPending = false;
     renderView();
-    renderBars();
   });
 }
 
