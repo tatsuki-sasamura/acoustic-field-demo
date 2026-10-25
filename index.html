@@ -404,6 +404,11 @@
         <input type="range" id="cs" min="100" max="1600" step="10" value="343" aria-label="音速 (m/s)、波長は一定">
         <output id="csVal">343 m/s</output>
       </div>
+      <div class="ctl" id="rowLam">
+        <span class="lab">波長 (音速一定)</span>
+        <input type="range" id="lam" min="2" max="30" step="0.1" value="8.6" aria-label="波長 (mm)、音速は一定で周波数が変わる">
+        <output id="lamVal">8.6 mm</output>
+      </div>
       <div class="ctl" id="rowCr">
         <span class="lab">板の音速比</span>
         <input type="range" id="cr" min="2" max="15" step="0.1" value="7.3" aria-label="ホログラム板の音速 ÷ 空気の音速">
@@ -444,7 +449,7 @@ let   C_AIR  = 0.343;                  // speed of sound in air: 343 m/s = 0.343
 let   FREQ   = 0.040;                  // drive frequency: 40 kHz = 0.040 cycles per µs
 let   PERIOD = 1 / FREQ;               // T = 25 µs
 let   LAMBDA = C_AIR / FREQ;           // λ = 8.575 mm
-const K_WAVE = 2 * Math.PI / LAMBDA;   // wavenumber k [rad/mm]
+let   K_WAVE = 2 * Math.PI / LAMBDA;   // wavenumber k [rad/mm]
 let   OMEGA  = 2 * Math.PI * FREQ;     // angular frequency ω [rad/µs]
 
 // Device geometry. All three devices share the same aperture: half-width
@@ -1566,6 +1571,7 @@ function loadSaved() {
     if (Number.isFinite(v.efade1)) ENV_FADE_END = v.efade1;
     if (Number.isFinite(v.cr)) C_PLATE_RATIO = v.cr;
     if (Number.isFinite(v.c)) setSoundSpeed(v.c);
+    if (Number.isFinite(v.lam)) setWavelength(v.lam);
     if (Number.isFinite(v.tmax)) T_END = v.tmax;
   } catch (e) { /* storage unavailable: defaults stay */ }
 }
@@ -1573,7 +1579,7 @@ function saveSettings() {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify({
       fade0: WAVELET_FADE_START, fade1: WAVELET_FADE_END, alpha: WAVELET_ALPHA, efade0: ENV_FADE_START, efade1: ENV_FADE_END,
-      c: Math.round(C_AIR * 1000), cr: C_PLATE_RATIO, tmax: T_END }));
+      c: Math.round(C_AIR * 1000), lam: LAMBDA, cr: C_PLATE_RATIO, tmax: T_END }));
   } catch (e) { /* ignore */ }
 }
 function currentUrl() {
@@ -1586,7 +1592,7 @@ function currentUrl() {
   if (state.playing || state.autoplay) q.set('play', '1');
   q.set('fade0', WAVELET_FADE_START); q.set('fade1', WAVELET_FADE_END); q.set('alpha', WAVELET_ALPHA);
   q.set('efade0', ENV_FADE_START); q.set('efade1', ENV_FADE_END);
-  q.set('c', Math.round(C_AIR * 1000)); q.set('cr', C_PLATE_RATIO); q.set('tmax', T_END);
+  q.set('c', Math.round(C_AIR * 1000)); q.set('lam', +LAMBDA.toFixed(3)); q.set('cr', C_PLATE_RATIO); q.set('tmax', T_END);
   return u.toString();
 }
 function syncUrlBox() {
@@ -1617,6 +1623,7 @@ loadSaved();
   if (ENV_FADE_END <= ENV_FADE_START) ENV_FADE_END = ENV_FADE_START + 0.5;
   const cr = num('cr', 2, 15); if (cr !== null) C_PLATE_RATIO = cr;
   const cs = num('c', 100, 1600); if (cs !== null) setSoundSpeed(cs);
+  const lm = num('lam', 2, 30); if (lm !== null) setWavelength(lm);
   C_PLATE = C_AIR * C_PLATE_RATIO; PLATE_PER_US = 1 / (1 / C_AIR - 1 / C_PLATE);
   const tm = num('tmax', 100, 3000); if (tm !== null) T_END = tm;
   if (WAVELET_FADE_END <= WAVELET_FADE_START) WAVELET_FADE_END = WAVELET_FADE_START + 0.25;
@@ -1629,6 +1636,7 @@ const fade0In = $('fade0'), fade1In = $('fade1'), fadeAIn = $('fadeA');
 const fade0Out = $('fade0Val'), fade1Out = $('fade1Val'), fadeAOut = $('fadeAVal');
 const csIn = $('cs'), csOut = $('csVal'), tmaxIn = $('tmax'), tmaxOut = $('tmaxVal');
 const crIn = $('cr'), crOut = $('crVal');
+const lamIn = $('lam'), lamOut = $('lamVal');
 const efade0In = $('efade0'), efade1In = $('efade1'), efade0Out = $('efade0Val'), efade1Out = $('efade1Val');
 
 function setSoundSpeed(ms) {
@@ -1640,8 +1648,19 @@ function setSoundSpeed(ms) {
   OMEGA = 2 * Math.PI * FREQ;
   PLATE_PER_US = 1 / (1 / C_AIR - 1 / C_PLATE);
 }
+function setWavelength(mm) {
+  // The speed of sound is kept fixed; the frequency follows (f = c / λ). The device geometry is in mm, so the
+  // caps, lines and plate stay where they are and only the wave pattern changes.
+  LAMBDA = mm;
+  K_WAVE = 2 * Math.PI / LAMBDA;
+  FREQ = C_AIR / LAMBDA;
+  PERIOD = 1 / FREQ;
+  OMEGA = 2 * Math.PI * FREQ;
+  fieldCache.key = '';                                  // the pressure field depends on k
+}
 function syncPhys() {
   csIn.value = Math.round(C_AIR * 1000); csOut.textContent = Math.round(C_AIR * 1000) + ' m/s';
+  lamIn.value = LAMBDA.toFixed(1); lamOut.textContent = LAMBDA.toFixed(1) + ' mm';
   tmaxIn.value = T_END; tmaxOut.textContent = T_END + ' µs';
   crIn.value = C_PLATE_RATIO; crOut.textContent = C_PLATE_RATIO.toFixed(1);
   timeIn.max = T_END;
@@ -1689,6 +1708,7 @@ crIn.addEventListener('input', () => {
   syncPhys(); saveSettings(); onParamsChanged();
 });
 csIn.addEventListener('input', () => { setSoundSpeed(Number(csIn.value)); syncPhys(); saveSettings(); onParamsChanged(); });
+lamIn.addEventListener('input', () => { setWavelength(Number(lamIn.value)); syncPhys(); saveSettings(); onParamsChanged(); });
 tmaxIn.addEventListener('input', () => {
   T_END = Number(tmaxIn.value);
   if (state.t > T_END) state.t = T_END;
@@ -1698,7 +1718,7 @@ $('resetAll').addEventListener('click', () => {
   // Defaults of everything: the view state and the physical/drawing settings. The saved settings are cleared too.
   WAVELET_ALPHA = 0.6; WAVELET_FADE_START = 1; WAVELET_FADE_END = 3;
   ENV_FADE_START = 12; ENV_FADE_END = 16;
-  C_PLATE_RATIO = 2.5 / 0.343; setSoundSpeed(343); T_END = 600;
+  C_PLATE_RATIO = 2.5 / 0.343; setSoundSpeed(343); setWavelength(0.343 / 0.040); T_END = 600;
   state.geo = 'A'; state.view = 'wave'; state.phaseDeg = 0; state.fx = 0; state.fy = 0; state.refl = 4.3; state.t = 150;
   setPlaying(false);
   try { localStorage.removeItem(STORE_KEY); } catch (e) { /* ignore */ }
