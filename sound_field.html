@@ -595,6 +595,9 @@ function buildModel() {
       m.halves.push(makeHalf('low', low, F, -Y, Y));
       m.halves.push(makeHalf('up', up, F, -Y, Y));
       m.bars = { xs, vals: xs.map(tauLow), curve: tauLow, x0: -APERTURE, x1: APERTURE, unit: 'us' };
+      // Largest focusing delay of either line without the phase term: the bar scale is set so that
+      // this delay plus one period (phase 360°) still fits between the line and the edge of the plot.
+      m.eFocusMax = Math.max(...xs.map(x => Math.max(tauLow(x), (DLow - dUp(x)) / C_AIR)));
       m.key = 'B|' + state.phaseDeg + '|' + F.x + '|' + F.y + '|' + C_AIR;
     } else {
       // (3) Plate: one flat line driven uniformly; the plate turns the uniform
@@ -1140,14 +1143,17 @@ function drawDevice(ctx, m, t) {
     fillStroke(ctx, COL.plate, COL.plateEdge, 2);
   }
   if (m.geo === 'B') {
-    // Drive delay of each element as a bar behind the element: length = distance sound travels in that delay.
+    // Drive delay of each element as a bar behind the element. The scale is fixed for the current focus so that
+    // the longest possible bar (focusing delay + one period, i.e. phase 360°) ends 1 mm inside the plot.
+    const room = Y_HALF - LINE_Y - 1;                                   // mm available behind each line
+    const barScale = room / (C_AIR * ((m.eFocusMax || 0) + PERIOD));   // mm of bar per mm of sound path
     ctx.lineCap = 'round';
     ctx.lineWidth = 5;
     for (const h of m.halves) {
       if (h.kind === 'img') continue;
       ctx.strokeStyle = halfColor(h);
       for (const s of h.src) {
-        const len = C_AIR * s.e;                        // mm
+        const len = C_AIR * s.e * barScale;             // mm
         if (len < 0.05) continue;
         const dir = s.y < 0 ? -1 : 1;                   // away from the centre
         ctx.globalAlpha = 0.9;
